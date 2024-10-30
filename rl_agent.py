@@ -1,4 +1,3 @@
-# file containing the RL agent that I will design later
 
 class RLAgent():
 

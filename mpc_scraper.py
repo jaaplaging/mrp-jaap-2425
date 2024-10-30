@@ -1,13 +1,12 @@
-# file containing functions that scrape the contents of the MPC site 
+import numpy as np
 import requests
 from bs4 import BeautifulSoup
 from astropy.coordinates import SkyCoord
 import astropy.units as u
-from astroplan import FixedTarget
-from helper import create_observer, twilight_rise_set, rise_set, near_moon, observable
 from astropy.time import Time
-import numpy as np
-import warnings
+from astroplan import FixedTarget
+
+from helper import create_observer, twilight_rise_set, rise_set, near_moon, observable
 from param_config import Configuration
 
 config = Configuration()
@@ -17,14 +16,27 @@ URL_EPH = "https://cgi.minorplanetcenter.net/cgi-bin/confirmeph2.cgi"
 
 
 def scraper(observer, time):
-    # function that calls other functions
+    """ main wrapper function for the web scraping
+
+    Args:
+        observer (astroplan.Observer): observer for which to get ephemerides
+        time (astropy.time.Time): date at which to get ephemerides
+
+    Returns:
+        obj_dict (dict): dictionary containing object data
+        eph_dict (dict): dictionary containing ephemerides data for each object
+    """
     obj_dict = get_objects()
     obj_dict = select_objects(obj_dict, observer, time)
     eph_dict = get_ephemerides(obj_dict, observer, time)
     return(obj_dict, eph_dict)
 
 def get_objects():
-    # function that reads the main site and returns them as a dict to scraper
+    """ Reads table from MPC website to create a dictionary of objects
+
+    Returns:
+        obj_dict (dict): dictionary of objects obtained from the website
+    """
     obj_dict = {}
     objects = requests.get(URL_OBJ)
     lines = objects.text.split('\n')
@@ -39,7 +51,16 @@ def get_objects():
 
 
 def select_objects(obj_dict, observer, time):
-    ''' function that determines which objects to get ephemerides for '''
+    ''' Function that determines which objects to get ephemerides for, based on observability
+    
+    Args:
+        obj_dict (dict): dictionary containing objects
+        observer (astroplan.Observer): observer object
+        time (astropy.time.Time): date for which to select objects
+
+    Returns:
+        obj_dict (dict): filtered dictionary of objects observable
+    '''
     #TODO turn into 1 for loop instead of 3
     #TODO consider making the magnitude check a 'soft check' or upping the limit
     #TODO moon check: maybe make more restrictive and check at other times during the window
@@ -64,13 +85,30 @@ def select_objects(obj_dict, observer, time):
     return(obj_dict)
     
 def get_ephemerides(obj_dict, observer, time):
-    # function that returns a clean dict with ephemerides to scaper
+    """ Obtains the ephemerides of the objects from the MPC website
+
+    Args:
+        obj_dict (dict): dictionary containing the objects to get ephemerides for
+        observer (astroplan.Observer): observer for which to get ephemerides
+        time (astropy.time.Time): date for which to get ephemerides
+    
+    Returns:
+        ephemerides (dict): dictionary containing ephemerides for each of the objects
+    """  
     soup = form_post(obj_dict, observer)
     t_breaking_dawn_part_II, t_evening = twilight_rise_set(observer, time)
     ephemerides = {}
 
-    def add_descendant(descendant):
-        ''' Adds empty entry for the descendant '''
+    def add_descendant(descendant, ephemerides):
+        ''' Adds empty entry for the descendant 
+        
+        Args:
+            descendant (str): name of the object
+            ephemerides (dict): dictionary containing ephemerides
+            
+        Returns:
+            ephemerides (dict): updated ephemerides dictionary
+        '''
         ephemerides[descendant] = {'time': [],
                                     'coord': [],
                                     'mag_V': [],
@@ -78,7 +116,19 @@ def get_ephemerides(obj_dict, observer, time):
         return(ephemerides)
 
     def parse_child_text(child, observer, t_breaking_dawn_part_II, t_evening, ephemerides):
-        ''' Parses the text of the ephemeris '''
+        ''' Parses the text of the ephemeris 
+        
+        Args:
+            child (str): text containing the ephemerides information
+            observer (astroplan.Observer): observer for which to get the ephemerides
+            t_breaking_dawn_part_II (astropy.time.Time): end of astronomical night
+            t_evening (astropy.time.Time): start of astronomical night
+            ephemerides (dict): dictionary of ephemerides to update
+
+        Returns:
+            ephemerides (dict): updated dictionary of ephemerides
+            target (astroplan.FixedTarget): created target from text
+        '''
         text = child.lstrip('\n')
         text = text.split(' ')
         text = [text[i] for i in range(len(text)) if text[i] != '']       
@@ -96,7 +146,7 @@ def get_ephemerides(obj_dict, observer, time):
 
     for descendant in soup.descendants:
         if descendant.name == 'b':
-            ephemerides = add_descendant(descendant.text)
+            ephemerides = add_descendant(descendant.text, ephemerides)
             current = descendant.text
         if descendant.name == 'pre':
             for child in descendant.descendants: 
@@ -114,7 +164,15 @@ def get_ephemerides(obj_dict, observer, time):
 
 
 def form_post(obj_dict, observer):
-    # function that performs a request.post to get the ephemerides
+    """ Creates a form post for the ephemerides form on the MPC site and obtains the resulting website information
+
+    Args:
+        obj_dict (dict): dictionary containing the objects in consideration
+        observer (astroplan.Observer): observer for which to get ephemerides
+
+    Returns:
+        soup (BeautifulSoup): obtained website information
+    """
     obj_list = list(obj_dict.keys())
 
     #TODO look at 'int' (intervals), 'start' (starting time), geocentric?
@@ -140,7 +198,3 @@ def form_post(obj_dict, observer):
 
 
 
-if __name__ == '__main__':
-    observer = create_observer()
-    time = Time(['2024-10-11 18:00:00'], scale='utc')
-    print(scraper(observer, time))

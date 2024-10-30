@@ -1,0 +1,9 @@
+numpy
+matplotlib
+astropy
+astroplan
+copy
+pickle
+pytz
+requests
+beautifulsoup4
