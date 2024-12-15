@@ -2,19 +2,21 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
-with open('random_search_results.pkl', 'rb') as f:
+DIR = 'C:/Users/sevij/Documents/Studie/Master/MRP/code/mrp-jaap-2425/results/'
+
+with open(DIR + 'new_results.pkl', 'rb') as f:
     results_1 = pickle.load(f)
 
-with open('random_search_results_2.pkl', 'rb') as f:
+with open(DIR + 'new_results_2.pkl', 'rb') as f:
     results_2 = pickle.load(f)
 
-with open('random_search_results_continuous.pkl', 'rb') as f:
-    results_cont = pickle.load(f)
+with open(DIR + 'new_results_3.pkl', 'rb') as f:
+    results_3 = pickle.load(f)
 
-with open('random_search_results_continuous_2.pkl', 'rb') as f:
-    results_cont_2 = pickle.load(f)
+with open(DIR + 'new_results_4.pkl', 'rb') as f:
+    results_4 = pickle.load(f)
 
-results = np.concatenate((results_1, results_2, results_cont, results_cont_2))
+results = np.concatenate((results_1, results_2, results_3, results_4))
 
 variables = ['init_attempts', 'w_add_object', 'w_remove_object', 
              'w_add_obs', 'w_remove_obs', 'w_replace', 'max_iter', 
@@ -22,10 +24,24 @@ variables = ['init_attempts', 'w_add_object', 'w_remove_object',
 
 
 for i in range(9):
-    plt.errorbar(results[:,i], results[:,9], yerr=results[:,10], fmt='o')
+
+    sorted_ind = np.argsort(results[:,i])
+    results_sorted = results[sorted_ind]
+    mean_x = []
+    mean_y = []
+    std_y = []
+    for j in range(len(results)-20):
+        mean_x.append(np.mean(results_sorted[j:j+20,i]))
+        mean_y.append(np.mean(results_sorted[j:j+20,9]))
+        std_y.append(np.std(results_sorted[j:j+20,9]))
+
+    plt.scatter(results[:,i], results[:,9])
+    plt.plot(mean_x, mean_y, color='red')
+    plt.plot(mean_x, np.array(mean_y)+np.array(std_y), color='orange')
+    plt.plot(mean_x, np.array(mean_y)-np.array(std_y), color='orange')
     plt.xlabel('Parameter value')
-    plt.ylabel('Mean fill factor')
-    plt.title(f'Paramter: {variables[i]}')
+    plt.ylabel('Fill factor')
+    plt.title(f'Parameter: {variables[i]}')
     plt.show()
 
 # for i in range(9):
@@ -71,5 +87,5 @@ plt.imshow(cor)
 plt.show()
 
 for sample in results:
-    if sample[9] >= 0.88:
+    if sample[9] >= 0.92:
         print(sample)

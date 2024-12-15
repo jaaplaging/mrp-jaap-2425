@@ -1,4 +1,7 @@
+import sys
+sys.path.append('mrp-jaap-2425/')
 import numpy as np
+import matplotlib.pyplot as plt
 import copy
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
@@ -27,6 +30,7 @@ class GDAgent():
         self.__create_init_weights()
         self.action_weights = [config.w_add_object, config.w_remove_object, config.w_add_obs, config.w_remove_obs, config.w_replace]
         self.config = config
+        self.history = []
 
     def create_init_state(self):
         ''' Tries to insert a certain number of observations for the initial state '''
@@ -91,12 +95,14 @@ class GDAgent():
             return(success)
 
         # attempt to add new objects until a certain threshold is reached or we run out of objects
+        #TODO make it so that this doesn't become an infinite loop in some circumstances
         while np.sum(self.env.rewards)/len(self.env.rewards) < self.config.init_fill and len(list(init_weights.keys())) > 0:
             object = select_object(init_weights)
             start, end = observation_window(object)
             success = add_attempt_loop(object, start, end)
             if success:
                 del init_weights[object]
+        self.history.append(self.env.calculate_reward())
 
 
     def __create_init_weights(self):
@@ -124,7 +130,7 @@ class GDAgent():
         for obj in self.eph_dict.keys():
             avg_airmass, avg_motion, avg_magnitude = calculate_averages(obj)
 
-            weight = int(10 * (1/avg_airmass) * (1+np.log10(avg_motion)) * avg_magnitude)
+            weight = (10 * (1/avg_airmass) * (1+np.log10(avg_motion)) * avg_magnitude)
             self.object_weights[obj] = weight
             total_weights += weight
 
@@ -170,7 +176,8 @@ class GDAgent():
             w_object = self.object_weights.copy()
             for obj in w_object.keys():
                 if invert:
-                    w_object[obj] = 1/w_object[obj]
+                    if w_object[obj] > 0:
+                        w_object[obj] = 1/w_object[obj]
                 if not env.obs_objects[obj] and not add_object:
                     w_object[obj] = 0
                 if env.obs_objects[obj] and add_object:
@@ -226,7 +233,7 @@ class GDAgent():
                 success = next_env.replace_observation(object, observation)
 
         # keep performing actions until a certain number of iterations is reached or a certain fill factor is reached
-        while iteration < self.config.max_iter and self.env.calculate_reward() < 0.95:
+        while iteration < self.config.max_iter: # and self.env.calculate_reward() < 0.95:
             next_env = copy.deepcopy(self.env)
             for sub_iter in range(self.config.n_sub_iter):
                 action = sample_action(next_env)            
@@ -234,4 +241,14 @@ class GDAgent():
 
             if next_env.calculate_reward() > self.env.calculate_reward():
                 self.env = copy.deepcopy(next_env)
+            self.history.append(self.env.calculate_reward())
             iteration += 1
+
+    def plot_history(self):
+        """ Generates a plot of the fill factor through the gradient descent """
+        plt.plot(self.history)
+        plt.xlabel('Iteration')
+        plt.ylabel('Fill factor')
+        plt.grid()
+        plt.savefig('convergence.png')
+        plt.show()

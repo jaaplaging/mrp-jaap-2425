@@ -7,3 +7,4 @@ pickle
 pytz
 requests
 beautifulsoup4
+seaborn

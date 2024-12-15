@@ -1,3 +1,5 @@
+import sys
+sys.path.append('mrp-jaap-2425/')
 import numpy as np
 import copy
 
@@ -274,7 +276,7 @@ class ObservationScheduleEnv():
         obs_length = self.config.t_setup+self.config.t_obs
 
         # check if the observation takes place at initial index
-        if self.state[ind_init] == object:
+        if self.obs_starts[ind_init] == object:
             init_state = copy.deepcopy(self.state)
             init_rewards = copy.deepcopy(self.rewards)
             init_obs_starts = copy.deepcopy(self.obs_starts)
@@ -308,7 +310,68 @@ class ObservationScheduleEnv():
 
 
     def __str__(self):
-        pass
+        """Generates a table of the observation schedule to print
+
+        Returns:
+            string (str): string representation of the schedule
+        """
+        string = 'Time   | Object   | RA        | Dec      | Mag (V) | Motion  \n--------------------------------------------------------\n'
+        for ind in range(len(self.obs_starts)):
+            if self.obs_starts[ind] != None:
+                time = self.__ind_to_time(ind)
+                obj = self.obs_starts[ind]
+                eph_ind = self.__get_ephemeris(obj, time)
+                ra = np.round(self.ephemerides[obj]['coord'][eph_ind].ra, 2)
+                dec = np.round(self.ephemerides[obj]['coord'][eph_ind].dec, 2)
+                mag = self.ephemerides[obj]['mag_V'][eph_ind]
+                motion = np.round(self.ephemerides[obj]['motion'][eph_ind], 1)
+                string += f'{time}  | {obj}  | {ra} | {dec} | {mag}    | {motion}  \n'
+        return(string)
+
+
+    def __ind_to_time(self, ind):
+        """ Converts index in schedule to time string
+
+        Args:
+            ind (int): index in the schedule
+
+        Returns:
+            time (str): time of index
+        """
+        hours = int(np.floor(ind/60))
+        minutes = ind % 60
+        start_hour, start_minutes = int(self.start_time.fits[11:13]), int(self.start_time.fits[14:16])
+        hours += start_hour
+        minutes += start_minutes
+        if minutes >= 60:
+            minutes -= 60
+            hours += 1
+        if hours >= 24:
+            hours -= 24
+        hours = str(hours)
+        minutes = str(minutes)
+        if len(hours) == 1:
+            hours = '0' + hours
+        if len(minutes) == 1:
+            minutes = '0' + minutes
+        time = f'{hours}:{minutes}'
+        return(time)
+    
+
+    def __get_ephemeris(self, obj, time):
+        """ Returns the index of the ephemeris of an object given a time
+
+        Args:
+            obj (str): key of object
+            time (str): string representation of time
+
+        Returns:
+            ephemeris_ind (int): index of ephemeris of object corresponding to given time
+        """
+        for ephemeris_ind in range(len(self.ephemerides[obj]['time'])):
+            if int(time[:2]) == int(self.ephemerides[obj]['time'][ephemeris_ind][0].fits[11:13]) or 1 + int(time[:2]) == int(self.ephemerides[obj]['time'][ephemeris_ind][0].fits[11:13]):
+                return(ephemeris_ind)
+
 
 
     
