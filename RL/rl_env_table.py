@@ -380,8 +380,9 @@ class ObservationScheduleEnv():
         self.action_availability_mask[ind,3] = True
         #self.action_availability_mask[ind,4] = True
 
-        self.object_unavailability_mask[object,1] = False
-        self.object_unavailability_mask[object,3] = True
+        if self.obs_count[obj_str] >= 3:
+            self.object_unavailability_mask[object,1] = False
+            self.object_unavailability_mask[object,3] = True
 
         self.observation_mask[object,ind] = True
 
@@ -402,6 +403,7 @@ class ObservationScheduleEnv():
         self.rewards[ind_start:ind_end] = 0
         self.obs_starts[ind_start] = None
         self.obs_count[self.__index_to_object(object)] -= 1
+        self.object_state[object, 4] -= 1
 
         for ind in range(ind_start-self.config.t_int-self.config.t_obs-self.config.t_setup+1,ind_end):
             if ind < len(self.state) and ind >= 0:
