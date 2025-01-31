@@ -108,6 +108,7 @@ class ObservationScheduleEnv():
                                 replace_available[i] = True
                 self.total_mask[object,:,4] = replace_available
         
+        self.taken_actions_countdown = np.where(self.taken_actions_countdown >= 1, self.taken_actions_countdown - 1, self.taken_actions_countdown)
         self.taken_actions_mask = np.where(self.taken_actions_countdown >= 1, False, True)
         self.total_mask = self.total_mask & self.taken_actions_mask
 
@@ -216,7 +217,7 @@ class ObservationScheduleEnv():
             
         reward = self.calculate_reward()
 
-        if step > self.config.steps:
+        if step >= self.config.steps-1:
             done = 1
         else:
             done = 0

@@ -2,7 +2,7 @@ import numpy as np
 import sys
 sys.path.append('mrp-jaap-2425/')
 import matplotlib.pyplot as plt
-from rl_env_table import ObservationScheduleEnv
+from ppo_env_table import ObservationScheduleEnv
 from mpc_scraper import scraper
 from helper import create_observer
 from param_config import Configuration
