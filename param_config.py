@@ -32,7 +32,7 @@ class Configuration:
         self.batch_size = 64
         self.target_update_freq = 10
         self.episodes = 200
-        self.steps = 100
+        self.steps = 200
         self.masking_duration = 2
 
         self.state_length = 240

@@ -3,8 +3,8 @@ sys.path.append('mrp-jaap-2425/')
 from astropy.time import Time
 import numpy as np
 import matplotlib.pyplot as plt
-from ppo_env_table import ObservationScheduleEnv
-from ppo_agent import PPOAgent
+from ppo_env_table_curriculum import ObservationScheduleEnvCurriculum
+from ppo_agent_curriculum import PPOAgentCurriculum
 from mpc_scraper import scraper
 from helper import create_observer
 from param_config import Configuration
@@ -24,9 +24,9 @@ def main(observer=create_observer(), time=Time.now()):
                 'B': {},
                 'C': {}}
     
-    env = ObservationScheduleEnv(observer, time, obj_dict, eph_dict, config = config)
+    env = ObservationScheduleEnvCurriculum(observer, time, obj_dict, eph_dict, config = config)
 
-    agent = PPOAgent(env)
+    agent = PPOAgentCurriculum(env)
     f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean = agent.train()
 
     plt.plot(f_factors_max, label='Max reward',color='red')
@@ -72,6 +72,7 @@ def run_multiple(observer=create_observer(), time=Time.now(), iterations=40):
     #obj_dict, eph_dict = scraper(observer, time)
 
     f_factors_max_list, f_factors_mean_list, f_factors_final_list, actions_taken_total_list, actions_logits_mean_list = [],[],[],[],[]
+    rewards_mean_list = []
     for i in range(9):
         print(f'Run {i+1} starting...')
         config = Configuration()
@@ -81,22 +82,21 @@ def run_multiple(observer=create_observer(), time=Time.now(), iterations=40):
         eph_dict = {'A': {},
                     'B': {},
                     'C': {}}
-        
-        env = ObservationScheduleEnv(observer, time, obj_dict, eph_dict, config = config)
+        target_fill = 0
 
-        agent = PPOAgent(env)
-        f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean = agent.train()
-        f_factors_max_list.append(f_factors_max)
+        env = ObservationScheduleEnvCurriculum(observer, time, obj_dict, eph_dict, target_fill, config = config)
+
+        agent = PPOAgentCurriculum(env)
+        rewards_mean, f_factors_mean, actions_taken_total, actions_logits_mean = agent.train()
         f_factors_mean_list.append(f_factors_mean)
-        f_factors_final_list.append(f_factors_final)
         actions_taken_total_list.append(actions_taken_total)
         actions_logits_mean_list.append(actions_logits_mean)
+        rewards_mean_list.append(rewards_mean)
 
     for i in range(9):
         plt.subplot(3,3,i+1)
-        plt.plot(f_factors_max_list[i], label='Max reward',color='red')
-        plt.plot(f_factors_mean_list[i], label='Mean reward',color='blue')
-        plt.plot(f_factors_final_list[i], label='Final reward', color='green')
+        plt.plot(rewards_mean_list[i], label='Mean reward', color='red')
+        plt.plot(f_factors_mean_list[i], label='Mean fill factor',color='blue')
     plt.savefig('rewards.png')
     plt.show()
 
@@ -129,7 +129,7 @@ def run_no_limit(observer=create_observer(), time=Time.now(), iterations=10):
 
     histories = []
     for i in range(iterations):
-        env = ObservationScheduleEnv(observer, time, obj_dict, eph_dict, config=config)
+        env = ObservationScheduleEnvCurriculum(observer, time, obj_dict, eph_dict, config=config)
         agent = GDAgent(observer, eph_dict, time, env, config=config)
         agent.create_init_state()
         agent.gradient_descent()

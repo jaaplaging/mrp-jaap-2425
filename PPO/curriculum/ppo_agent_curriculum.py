@@ -14,7 +14,7 @@ from time import perf_counter
 
 config = Configuration()
 
-class PPOAgent():
+class PPOAgentCurriculum():
 
     def __init__(self, env):
         self.env = env
@@ -29,8 +29,8 @@ class PPOAgent():
         self.batch_size = config.batch_size
         self.actor_network = self.__create_actor_network()
         self.critic_network = self.__create_critic_network()
-        self.actor_network_func = tf.function(self.actor_network)
-        self.critic_network_func = tf.function(self.critic_network)
+        self.actor_network_func = tf.function(self.actor_network, reduce_retracing=True)
+        self.critic_network_func = tf.function(self.critic_network, reduce_retracing=True)
         self.optimizer_actor = tf.keras.optimizers.Adam(learning_rate = self.learning_rate_actor)
         self.optimizer_critic = tf.keras.optimizers.Adam(learning_rate = self.learning_rate_critic)
 
@@ -80,9 +80,9 @@ class PPOAgent():
         return(model)
 
     # taken from https://medium.com/@danushidk507/ppo-algorithm-3b33195de14a
-    @tf.function
+    @tf.function(reduce_retracing=True)
     def ppo_loss(self, old_logits, old_values, advantages, states, actions, returns):        
-        @tf.function
+        @tf.function(reduce_retracing=True)
         def compute_policy_loss(logits, actions):
             actions_onehot = tf.one_hot(actions, self.action_size, dtype=tf.float32)
             policy = tf.nn.softmax(logits)
@@ -101,18 +101,18 @@ class PPOAgent():
             policy_loss = policy_loss - 0.01 * entropy_bonus
             return policy_loss
 
-        @tf.function
+        @tf.function(reduce_retracing=True)
         def compute_value_loss(values, returns):
             # Value loss
             value_loss = tf.reduce_mean(tf.square(values - returns))
             return value_loss
         
-        @tf.function
+        @tf.function(reduce_retracing=True)
         def get_advantages(returns, values):
             advantages = returns - values
             return (advantages - tf.reduce_mean(advantages)) / (tf.math.reduce_std(advantages) + 1e-8)
         
-        @tf.function
+        @tf.function(reduce_retracing=True)
         def train_step(states, actions, returns, old_logits, old_values):
             with tf.GradientTape() as actor_tape:
                 logits = self.actor_network(states)
@@ -135,6 +135,7 @@ class PPOAgent():
         f_factors_final = []
         f_factors_max = []
         f_factors_mean = []
+        rewards_mean = []
         actions_taken_total = [[],[],[],[],[]]
         actions_logits_mean = [[],[],[],[],[]]
 
@@ -154,6 +155,7 @@ class PPOAgent():
                 f_factors_final.append(f_factors[-1])
                 f_factors_max.append(np.max(f_factors))
                 f_factors_mean.append(np.mean(f_factors))
+                rewards_mean.append(np.mean(rewards))
                 for ind, action in enumerate(self.actions_taken):
                     actions_taken_total[ind].append(action)
 
@@ -180,7 +182,7 @@ class PPOAgent():
                 action_ind = np.unravel_index(action, (3, config.state_length, 5))
                 self.actions_taken[action_ind[2]] += 1
                 previous_reward = np.sum(self.env.rewards)/len(self.env.rewards)
-                next_state, reward, done = self.env.step(action_ind[0], action_ind[1], action_ind[2], step)
+                next_state, reward, done = self.env.step(action_ind[0], action_ind[1], action_ind[2])
 
                 logits_reshaped = logits.numpy().reshape((3,240,5))
                 for a in range(5):
@@ -196,7 +198,6 @@ class PPOAgent():
                 #     reward = (reward - 0.4) * 5/0.6 + delta * 5/0.17
                 # else:
                 #     reward = -1
-                reward = reward-previous_reward
 
                 f_factors.append(np.sum(self.env.rewards)/len(self.env.rewards))
                 reward_per_action[action_ind[2]] += reward
@@ -267,6 +268,6 @@ class PPOAgent():
         self.actor_network.save('ppo_actor_network.keras')
         self.critic_network.save('ppo_critic_network.keras')
 
-        return(f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean)
+        return(rewards_mean, f_factors_mean, actions_taken_total, actions_logits_mean)
             
 
