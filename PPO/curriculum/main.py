@@ -67,12 +67,66 @@ def main(observer=create_observer(), time=Time.now()):
     plt.show()
 
 
-
-def run_multiple(observer=create_observer(), time=Time.now(), iterations=40):
+def run_4(observer=create_observer(), time=Time.now(), iterations=40):
     #obj_dict, eph_dict = scraper(observer, time)
 
     f_factors_max_list, f_factors_mean_list, f_factors_final_list, actions_taken_total_list, actions_logits_mean_list = [],[],[],[],[]
     rewards_mean_list = []
+    steps_taken_list = []
+    for i in range(4):
+        print(f'Run {i+1} starting...')
+        config = Configuration()
+        obj_dict = {'A': {}}#,
+                  #  'B': {},
+                  #  'C': {}}
+        eph_dict = {'A': {}}#,
+                  #  'B': {},
+                  #  'C': {}}
+        target_fill = 0.5
+
+        env = ObservationScheduleEnvCurriculum(observer, time, obj_dict, eph_dict, target_fill, config = config)
+
+        agent = PPOAgentCurriculum(env)
+        rewards_mean, f_factors_mean, actions_taken_total, actions_logits_mean, steps_taken = agent.train()
+        f_factors_mean_list.append(f_factors_mean)
+        actions_taken_total_list.append(actions_taken_total)
+        actions_logits_mean_list.append(actions_logits_mean)
+        rewards_mean_list.append(rewards_mean)
+        steps_taken_list.append(steps_taken)
+
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.plot(steps_taken_list[i], label='steps taken', color='blue')
+    plt.savefig('rewards.png')
+    plt.show()
+
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.plot(actions_taken_total_list[i][0], label='Add object',color='red')
+        plt.plot(actions_taken_total_list[i][1], label='Remove object',color='orange')
+        plt.plot(actions_taken_total_list[i][2], label='Add observation',color='green')
+        plt.plot(actions_taken_total_list[i][3], label='Remove observation',color='blue')
+        plt.plot(actions_taken_total_list[i][4], label='Replace observation',color='pink')
+    plt.savefig('actions.png')
+    plt.show()
+
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.plot(actions_logits_mean_list[i][0], label='Add object',color='red')
+        plt.plot(actions_logits_mean_list[i][1], label='Remove object',color='orange')
+        plt.plot(actions_logits_mean_list[i][2], label='Add observation',color='green')
+        plt.plot(actions_logits_mean_list[i][3], label='Remove observation',color='blue')
+        plt.plot(actions_logits_mean_list[i][4], label='Replace observation',color='pink')
+    plt.savefig('logits.png')
+    plt.show()
+
+
+def run_9(observer=create_observer(), time=Time.now(), iterations=40):
+    #obj_dict, eph_dict = scraper(observer, time)
+
+    f_factors_max_list, f_factors_mean_list, f_factors_final_list, actions_taken_total_list, actions_logits_mean_list = [],[],[],[],[]
+    rewards_mean_list = []
+    steps_taken_list = []
     for i in range(9):
         print(f'Run {i+1} starting...')
         config = Configuration()
@@ -87,16 +141,16 @@ def run_multiple(observer=create_observer(), time=Time.now(), iterations=40):
         env = ObservationScheduleEnvCurriculum(observer, time, obj_dict, eph_dict, target_fill, config = config)
 
         agent = PPOAgentCurriculum(env)
-        rewards_mean, f_factors_mean, actions_taken_total, actions_logits_mean = agent.train()
+        rewards_mean, f_factors_mean, actions_taken_total, actions_logits_mean, steps_taken = agent.train()
         f_factors_mean_list.append(f_factors_mean)
         actions_taken_total_list.append(actions_taken_total)
         actions_logits_mean_list.append(actions_logits_mean)
         rewards_mean_list.append(rewards_mean)
+        steps_taken_list.append(steps_taken)
 
     for i in range(9):
         plt.subplot(3,3,i+1)
-        plt.plot(rewards_mean_list[i], label='Mean reward', color='red')
-        plt.plot(f_factors_mean_list[i], label='Mean fill factor',color='blue')
+        plt.plot(steps_taken_list[i], label='steps taken', color='blue')
     plt.savefig('rewards.png')
     plt.show()
 
@@ -152,5 +206,5 @@ def run_no_limit(observer=create_observer(), time=Time.now(), iterations=10):
 
 if __name__ == '__main__':
     #main()
-    run_multiple()
+    run_4()
     #run_no_limit()

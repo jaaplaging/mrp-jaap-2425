@@ -64,9 +64,9 @@ class ObservationScheduleEnvCurriculum():
         #     rise_ind, set_ind = self.__time_to_index(rise), self.__time_to_index(set)
         #     self.mask_object_visibility[ind, rise_ind:set_ind, :] = True
 
-        self.mask_day = np.full((3, self.config.state_length, 5), True)
+        self.mask_day = np.full((1, self.config.state_length, 5), True)
 
-        self.mask_object_visibility = np.full((3,self.config.state_length,5), True)
+        self.mask_object_visibility = np.full((1,self.config.state_length,5), True)
 
         self.base_mask = self.mask_day & self.mask_object_visibility
 
@@ -81,14 +81,14 @@ class ObservationScheduleEnvCurriculum():
         self.action_availability_mask[:,4] = False
         #self.action_availability_mask[self.twilight_morning_ind-self.config.t_obs*2-self.config.t_setup*2-self.config.t_int:,0] = False
 
-        self.object_unavailability_mask = np.full((3, 5), False)
+        self.object_unavailability_mask = np.full((1, 5), False)
         self.object_unavailability_mask[:,0] = True
 
-        self.observation_mask = np.full((3,self.config.state_length), False)
+        self.observation_mask = np.full((1,self.config.state_length), False)
 
         #test to try to fix repetition of actions
-        self.taken_actions_mask = np.full((3,self.config.state_length,5), True)
-        self.taken_actions_countdown = np.full((3,self.config.state_length,5), 0)
+        self.taken_actions_mask = np.full((1,self.config.state_length,5), True)
+        self.taken_actions_countdown = np.full((1,self.config.state_length,5), 0)
 
         self.total_mask = self.base_mask & np.einsum('ij,kj -> kij', self.action_availability_mask, self.object_unavailability_mask) & self.taken_actions_mask
 
@@ -116,11 +116,11 @@ class ObservationScheduleEnvCurriculum():
 
 
     def __create_object_state(self):
-        object_state = np.empty((3, 6))
+        object_state = np.empty((1, 6))
 
         object_state[0] = [30, 2., 20., 15., 0, 1]
-        object_state[1] = [60, 3., 20.3, 20., 0, 1]
-        object_state[2] = [75, 1.5, 19., 5., 0, 1]
+        # object_state[1] = [60, 3., 20.3, 20., 0, 1]
+        # object_state[2] = [75, 1.5, 19., 5., 0, 1]
         # def get_airmass_peak(object_ephemerides):
         #     coords_mid = object_ephemerides['coord'][len(object_ephemerides['coord'])//2]
         #     peak_time = opt_time(self.observer, FixedTarget(name='target', coord=coords_mid), self.time)
@@ -241,7 +241,7 @@ class ObservationScheduleEnvCurriculum():
         #     reward = -1
 
         #  Linear  #
-        reward = np.sum(self.rewards)/len(self.rewards)*2-1
+        reward = np.sum(self.rewards)/len(self.rewards)
         
         #  Power  #
         #reward = (np.sum(self.rewards)/len(self.rewards)*2-1)**3
