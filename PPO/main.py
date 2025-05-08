@@ -16,40 +16,31 @@ def main(observer=create_observer(), time=Time.now()):
     #obj_dict, eph_dict = scraper(observer, time)
 
 
+    obj_dict = {}
+    eph_dict = {}
+
     config = Configuration()
-    obj_dict = {'A': {},
-                'B': {},
-                'C': {}}
-    eph_dict = {'A': {},
-                'B': {},
-                'C': {}}
+    for i in range(config.n_objects):
+        obj_dict[str(i)] = {}
+        eph_dict[str(i)] = {}
     
     env = ObservationScheduleEnv(observer, time, obj_dict, eph_dict, config = config)
 
     agent = PPOAgent(env)
-    f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean = agent.train()
+    f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean, f_factors_eval = agent.train()
 
     plt.plot(f_factors_max, label='Max reward',color='red')
     plt.plot(f_factors_mean, label='Mean reward',color='blue')
     plt.plot(f_factors_final, label='Final reward', color='green')
-    plt.title(f'absolute rewards')
-    plt.xlabel('Episode')
-    plt.ylabel('Reward')
-    plt.legend()
-    plt.tight_layout()
     plt.savefig('rewards.png')
     plt.show()
+
 
     plt.plot(actions_taken_total[0], label='Add object',color='red')
     plt.plot(actions_taken_total[1], label='Remove object',color='orange')
     plt.plot(actions_taken_total[2], label='Add observation',color='green')
     plt.plot(actions_taken_total[3], label='Remove observation',color='blue')
     plt.plot(actions_taken_total[4], label='Replace observation',color='pink')
-    plt.title(f'actions taken')
-    plt.xlabel('Episode')
-    plt.ylabel('Number of actions')
-    plt.legend(bbox_to_anchor=(1.1,1))
-    plt.tight_layout()
     plt.savefig('actions.png')
     plt.show()
 
@@ -58,12 +49,15 @@ def main(observer=create_observer(), time=Time.now()):
     plt.plot(actions_logits_mean[2], label='Add observation',color='green')
     plt.plot(actions_logits_mean[3], label='Remove observation',color='blue')
     plt.plot(actions_logits_mean[4], label='Replace observation',color='pink')
-    plt.title(f'Action logits values')
-    plt.xlabel('Episode')
-    plt.ylabel('Mean logit values')
-    plt.legend(bbox_to_anchor=(1.1,1))
-    plt.tight_layout()
     plt.savefig('logits.png')
+    plt.show()
+
+    ep = np.arange(0, config.episodes, config.evaluation_interval)
+    plt.plot(ep, f_factors_eval, label='Eval fill factor', color='green')
+    plt.title('Evaluation episodes results')
+    plt.xlabel('Episode')
+    plt.ylabel('Fill factor')
+    plt.savefig('evaluation.png')
     plt.show()
 
 
@@ -71,26 +65,27 @@ def main(observer=create_observer(), time=Time.now()):
 def run_multiple(observer=create_observer(), time=Time.now(), iterations=40):
     #obj_dict, eph_dict = scraper(observer, time)
 
-    f_factors_max_list, f_factors_mean_list, f_factors_final_list, actions_taken_total_list, actions_logits_mean_list = [],[],[],[],[]
+    obj_dict = {}
+    eph_dict = {}
+
+    f_factors_max_list, f_factors_mean_list, f_factors_final_list, actions_taken_total_list, actions_logits_mean_list, f_factors_eval_list = [],[],[],[],[],[]
     for i in range(9):
         print(f'Run {i+1} starting...')
         config = Configuration()
-        obj_dict = {'A': {},
-                    'B': {},
-                    'C': {}}
-        eph_dict = {'A': {},
-                    'B': {},
-                    'C': {}}
+        for i in range(config.n_objects):
+            obj_dict[str(i)] = {}
+            eph_dict[str(i)] = {}
         
         env = ObservationScheduleEnv(observer, time, obj_dict, eph_dict, config = config)
 
         agent = PPOAgent(env)
-        f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean = agent.train()
+        f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean, f_factors_eval = agent.train()
         f_factors_max_list.append(f_factors_max)
         f_factors_mean_list.append(f_factors_mean)
         f_factors_final_list.append(f_factors_final)
         actions_taken_total_list.append(actions_taken_total)
         actions_logits_mean_list.append(actions_logits_mean)
+        f_factors_eval_list.append(f_factors_eval)
 
     for i in range(9):
         plt.subplot(3,3,i+1)
@@ -120,32 +115,12 @@ def run_multiple(observer=create_observer(), time=Time.now(), iterations=40):
     plt.savefig('logits.png')
     plt.show()
 
-
-def run_no_limit(observer=create_observer(), time=Time.now(), iterations=10):
-    obj_dict, eph_dict = scraper(observer, time)
-
-    config = Configuration()
-    config.max_iter = 2000
-
-    histories = []
-    for i in range(iterations):
-        env = ObservationScheduleEnv(observer, time, obj_dict, eph_dict, config=config)
-        agent = GDAgent(observer, eph_dict, time, env, config=config)
-        agent.create_init_state()
-        agent.gradient_descent()
-        final_reward = agent.env.calculate_reward()
-        print(f'Final fill factor: {final_reward}')
-        histories.append(agent.history)
-    
-    with open('histories.pkl', 'rb') as file:
-        histories_before = pickle.load(file)
-
-    histories.extend(histories_before)
-
-    print(len(histories))
-
-    with open('histories.pkl', 'wb') as file:
-        pickle.dump(histories, file)
+    ep = np.arange(0, config.episodes, config.evaluation_interval)
+    for i in range(9):
+        plt.subplot(3,3,i+1)
+        plt.plot(ep, f_factors_eval_list[i], label='Eval fill factor', color='green')
+    plt.savefig('evaluation.png')
+    plt.show()
 
     
 

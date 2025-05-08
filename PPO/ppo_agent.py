@@ -11,6 +11,7 @@ import random
 import matplotlib.pyplot as plt
 import seaborn as sns
 from time import perf_counter
+import copy
 
 config = Configuration()
 
@@ -18,15 +19,15 @@ class PPOAgent():
 
     def __init__(self, env):
         self.env = env
-        self.state_space_a = (18)
-        self.state_space_b = (config.state_length)
-        self.action_space = (3, config.state_length, 5)
-        self.action_size = 3 * config.state_length * 5
-        self.learning_rate_actor = config.learning_rate
-        self.learning_rate_critic = config.learning_rate
-        self.discount_factor = config.discount_factor
-        self.clip_ratio = config.clip_ratio
-        self.batch_size = config.batch_size
+        self.state_space_a = (self.env.config.n_objects * 6)
+        self.state_space_b = (self.env.config.state_length)
+        self.action_space = (self.env.config.n_objects, self.env.config.state_length, 5)
+        self.action_size = self.env.config.n_objects * self.env.config.state_length * 5
+        self.learning_rate_actor = self.env.config.learning_rate
+        self.learning_rate_critic = self.env.config.learning_rate
+        self.discount_factor = self.env.config.discount_factor
+        self.clip_ratio = self.env.config.clip_ratio
+        self.batch_size = self.env.config.batch_size
         self.actor_network = self.__create_actor_network()
         self.critic_network = self.__create_critic_network()
         self.actor_network_func = tf.function(self.actor_network)
@@ -36,43 +37,41 @@ class PPOAgent():
 
 
     def __create_actor_network(self):
-        input_x = Input(shape=(18,))
-        input_y = Input(shape=(config.state_length,))
+        input_x = Input(shape=(self.env.config.n_objects * 6,))
+        input_y = Input(shape=(self.env.config.state_length,))
 
-        x = Dense(8, activation='relu')(input_x)
-        x = Dense(4, activation='relu')(x)
+        x = Dense(self.env.config.layer_size, activation='relu')(input_x)
+        x = Dense(self.env.config.layer_size, activation='relu')(x)
 
-        y = CategoryEncoding(num_tokens=(4))(input_y)
-        y = Dense(64, activation='relu')(y)
-        y = Dense(16, activation='relu')(y)
-        y = Dense(4, activation='relu')(y)
+        y = CategoryEncoding(num_tokens=self.env.config.n_objects+1, output_mode='one_hot')(input_y)
+        y = Flatten()(y)
+        y = Dense(self.env.config.layer_size, activation='relu')(y)
+        y = Dense(self.env.config.layer_size, activation='relu')(y)
 
         combined = Concatenate()([x, y])
 
-        z = Dense(16, activation='relu')(combined)
-        z = Dense(64, activation='relu')(z)
-        z = Dense(256, activation='relu')(z)
-        z = Dense(3*config.state_length*5, activation='linear')(z)
+        z = Dense(2 * self.env.config.layer_size, activation='relu')(combined)
+        z = Dense(self.env.config.n_objects*self.env.config.state_length*5, activation='linear')(z)
 
         model = Model(inputs=[input_x, input_y], outputs=z)
 
         return(model)
     
     def __create_critic_network(self):
-        input_x = Input(shape=(18,))
-        input_y = Input(shape=(config.state_length,))
+        input_x = Input(shape=(self.env.config.n_objects * 6,))
+        input_y = Input(shape=(self.env.config.state_length,))
 
         x = Dense(8, activation='relu')(input_x)
         x = Dense(4, activation='relu')(x)
 
-        y = CategoryEncoding(num_tokens=(4))(input_y)
-        y = Dense(64, activation='relu')(y)
-        y = Dense(16, activation='relu')(y)
+        y = CategoryEncoding(num_tokens=2, output_mode='one_hot')(input_y)
+        y = Flatten()(y)
+        y = Dense(32, activation='relu')(y)
         y = Dense(4, activation='relu')(y)
 
         combined = Concatenate()([x, y])
 
-        z = Dense(4, activation='relu')(combined)
+        z = Dense(8, activation='relu')(combined)
         z = Dense(1, activation='linear')(z)
 
         model = Model(inputs=[input_x, input_y], outputs=z)
@@ -92,6 +91,7 @@ class PPOAgent():
 
             # Policy loss
             ratio = tf.exp(tf.math.log(action_probs + 1e-10) - tf.math.log(old_action_probs + 1e-10))
+
             clipped_ratio = tf.clip_by_value(ratio, 1 - self.clip_ratio, 1 + self.clip_ratio)
             policy_loss = -tf.reduce_mean(tf.minimum(ratio * advantages, clipped_ratio * advantages))
 
@@ -99,7 +99,7 @@ class PPOAgent():
             entropy_bonus = tf.reduce_mean(policy * tf.math.log(policy + 1e-10))
 
             policy_loss = policy_loss - 0.01 * entropy_bonus
-            return policy_loss
+            return policy_loss, action_probs, old_action_probs
 
         @tf.function
         def compute_value_loss(values, returns):
@@ -116,7 +116,7 @@ class PPOAgent():
         def train_step(states, actions, returns, old_logits, old_values):
             with tf.GradientTape() as actor_tape:
                 logits = self.actor_network(states)
-                policy_loss = compute_policy_loss(logits, actions)
+                policy_loss, action_probs, old_action_probs = compute_policy_loss(logits, actions)
             with tf.GradientTape() as critic_tape:
                 values = self.critic_network(states)
                 value_loss = compute_value_loss(values, returns)
@@ -124,36 +124,37 @@ class PPOAgent():
             value_gradients = critic_tape.gradient(value_loss, self.critic_network.trainable_variables)
             self.optimizer_actor.apply_gradients(zip(policy_gradients, self.actor_network.trainable_variables))
             self.optimizer_critic.apply_gradients(zip(value_gradients, self.critic_network.trainable_variables))
-            return(policy_loss, value_loss)
+            return(policy_loss, value_loss, action_probs, old_action_probs)
 
         advantages = get_advantages(returns, old_values)
-        for i in range(config.n_epochs):
-            policy_loss, value_loss = train_step(states, actions, returns, old_logits, old_values)
-        return(policy_loss, value_loss)
+        for i in range(self.env.config.n_epochs):
+            policy_loss, value_loss, action_probs, old_action_probs = train_step(states, actions, returns, old_logits, old_values)
+        return(policy_loss, value_loss, action_probs, old_action_probs, advantages)
     
-    def train(self, episodes = config.episodes, steps = config.steps):
+    def train(self):
+        times = [0 for i in range(20)]
+
         f_factors_final = []
         f_factors_max = []
         f_factors_mean = []
+        rewards_mean = []
         actions_taken_total = [[],[],[],[],[]]
         actions_logits_mean = [[],[],[],[],[]]
+        steps_taken = []
 
         policy_losses = []
         value_losses = []
+
+        f_factors_eval = []
         
-        for episode in range(episodes):
+        for episode in range(self.env.config.episodes):
             
             
             try:
-                #print(f'Episode number: {episode}')
-                #print(f'Mean reward during episode: {np.mean(f_factors)}')
-                #print(f'Max reward during episode: {np.max(f_factors)}')
-                #print(f'Final reward during episode: {f_factors[-1]}')
-                #print(f'Average reward per action: {[reward_per_action[i]/(taken_actions[i]+1) for i in range(5)]}')
-            
                 f_factors_final.append(f_factors[-1])
                 f_factors_max.append(np.max(f_factors))
                 f_factors_mean.append(np.mean(f_factors))
+                rewards_mean.append(np.mean(rewards))
                 for ind, action in enumerate(self.actions_taken):
                     actions_taken_total[ind].append(action)
 
@@ -161,8 +162,9 @@ class PPOAgent():
                 pass  
 
             states, actions, rewards, values, returns = [],[],[],[],[]
+
             self.env.reset()
-            state = [self.env.object_state, self.env.state]
+            state = [copy.deepcopy(self.env.object_state_norm), copy.deepcopy(self.env.state)]
 
             f_factors = []
             reward = -1
@@ -171,43 +173,31 @@ class PPOAgent():
 
             self.actions_taken = [0,0,0,0,0]
 
-            for step in range(steps):
-                state = [state[0].flatten().astype('float32').reshape(1,18), state[1].reshape(1,config.state_length)]
+            for step in range(self.env.config.steps):
+                state = [state[0].flatten().astype('float32').reshape(1, self.env.config.n_objects * 6), state[1].reshape(1, self.env.config.state_length)]
                 logits = self.actor_network_func(state) # self.actor_network.predict(state, verbose=0)
                 value = self.critic_network_func(state)  # self.critic_network.predict(state, verbose=0)
 
                 action = tf.random.categorical(tf.where(self.env.total_mask.flatten(), logits, -np.inf), 1)[0, 0].numpy()
-                action_ind = np.unravel_index(action, (3, config.state_length, 5))
+                action_ind = np.unravel_index(action, (self.env.config.n_objects, self.env.config.state_length, 5))
                 self.actions_taken[action_ind[2]] += 1
                 previous_reward = np.sum(self.env.rewards)/len(self.env.rewards)
-                next_state, reward, done = self.env.step(action_ind[0], action_ind[1], action_ind[2], step)
+                next_state, reward, done = copy.deepcopy(self.env.step(action_ind[0], action_ind[1], action_ind[2], step))
 
-                logits_reshaped = logits.numpy().reshape((3,240,5))
+                logits_reshaped = logits.numpy().reshape((self.env.config.n_objects,self.env.config.state_length,5))
                 for a in range(5):
                     actions_logits_mean[a].append(np.max(logits_reshaped[:,:,a]))
-
-                #reward = 0.5 * reward + 2 * (reward - previous_reward)
-                # if reward > 0.6:
-                #     reward = (reward-0.6) * 25
-                # else:
-                #     reward = -1
-                # delta = reward - previous_reward
-                # if reward > 0.4 and delta > 0:
-                #     reward = (reward - 0.4) * 5/0.6 + delta * 5/0.17
-                # else:
-                #     reward = -1
-                reward = reward-previous_reward
 
                 f_factors.append(np.sum(self.env.rewards)/len(self.env.rewards))
                 reward_per_action[action_ind[2]] += reward
                 taken_actions[action_ind[2]] += 1
 
-                states.append(state)
+                states.append(copy.deepcopy(state))
                 actions.append(action)
                 rewards.append(reward)
-                values.append(value)
+                values.append(value.numpy()[0,0])
 
-                state = next_state
+                state = copy.deepcopy(next_state)
                 if done:
                     returns_batch = []
                     discounted_sum = 0
@@ -218,55 +208,42 @@ class PPOAgent():
                     
                     states = [np.vstack([states[i][0].flatten() for i in range(len(states))]).astype('float32'), np.array([states[i][1].flatten() for i in range(len(states))])]
                     actions = np.array(actions, dtype=np.int32)
-                    values = tf.concat(values, axis=0)
+                    values = tf.convert_to_tensor(values, dtype=tf.float32)
                     returns_batch = tf.convert_to_tensor(returns_batch, dtype=tf.float32)
 
                     old_logits = self.actor_network_func(states) # self.actor_network.predict(states)
 
-                    policy_loss, value_loss = self.ppo_loss(old_logits, values, returns_batch, states, actions, returns_batch)
+                    policy_loss, value_loss, action_probs, old_action_probs, advantages = self.ppo_loss(old_logits, values, returns_batch, states, actions, returns_batch)
                     print(f"Episode: {episode + 1}, Loss: {policy_loss + 0.5 * value_loss}")
                     policy_losses.append(policy_loss.numpy())
                     value_losses.append(value_loss.numpy())
+                    
+                    steps_taken.append(step+1)
+
                     break
 
+            # Evaluation episode
 
-        # # test run
-        # self.env.reset()
-        # state = [self.env.object_state, self.env.state]
-        # done = 0
-        # i = 0
-        # while done != 1:
-        #     # legal = False
-        #     # while not legal:
-        #     #     action = tf.random.categorical(logits, 1)[0, 0].numpy()
-        #     #     action_ind = np.unravel_index(action, (3, config.state_length, 5))
-        #     #     if self.env.total_mask[action_ind[0], action_ind[1], action_ind[2]]:
-        #     #         legal = True
-        #     action = tf.random.categorical(tf.where(self.env.total_mask.flatten(), logits, -np.inf), 1)[0, 0].numpy()
-        #     action_ind = np.unravel_index(action, (3, config.state_length, 5))
-        #     previous_reward = reward
-        #     next_state, reward, done = self.env.step(action_ind[0], action_ind[1], action_ind[2], i)
-        #     print(reward)
-        #     if action_ind[2] == 0:
-        #         print(f'added object {action_ind[0]} at {action_ind[1]}')
-        #     if action_ind[2] == 1:
-        #         print(f'removed object {action_ind[0]}')
-        #     if action_ind[2] == 2:
-        #         print(f'added observation for object {action_ind[0]} at {action_ind[1]}')
-        #     if action_ind[2] == 3:
-        #         print(f'removed observation of object {action_ind[0]} at {action_ind[1]}')
-        #     if action_ind[2] == 4:
-        #         print(f'replaced observation of object {action_ind[0]} at {action_ind[1]}')
-        #     state = next_state
-        #     i += 1
-        # print(self.env.state)
+            if episode % self.env.config.evaluation_interval == 0:
+                self.env.reset()
+                state = [copy.deepcopy(self.env.object_state_norm), copy.deepcopy(self.env.state)]
+            
+                for step in range(self.env.config.steps):
+                    state = [state[0].flatten().astype('float32').reshape(1, self.env.config.n_objects * 6), state[1].reshape(1, self.env.config.state_length)]
+                    logits = self.actor_network_func(state) # self.actor_network.predict(state, verbose=0)
 
+                    # off-policy argmax instead of on-policy stochastic
+                    action = tf.math.argmax(tf.where(self.env.total_mask.flatten(), logits, -np.inf), 1)[0].numpy()
+                    action_ind = np.unravel_index(action, (self.env.config.n_objects, self.env.config.state_length, 5))
+                    next_state, reward, done = copy.deepcopy(self.env.step(action_ind[0], action_ind[1], action_ind[2], step))
 
-
+                    state = copy.deepcopy(next_state)
+                f_factors_eval.append(np.sum(self.env.rewards)/len(self.env.rewards))
 
         self.actor_network.save('ppo_actor_network.keras')
         self.critic_network.save('ppo_critic_network.keras')
 
-        return(f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean)
+
+        return(f_factors_max, f_factors_mean, f_factors_final, actions_taken_total, actions_logits_mean, f_factors_eval)
             
 

@@ -10,6 +10,8 @@ from helper import create_observer
 from param_config import Configuration
 import pickle
 from time import perf_counter
+from keras.saving import load_model
+import tensorflow as tf
 
 
 def main(observer=create_observer(), time=Time.now()):
@@ -82,17 +84,27 @@ def run_4(observer=create_observer(), time=Time.now(), iterations=40):
         eph_dict = {'A': {}}#,
                   #  'B': {},
                   #  'C': {}}
-        target_fill = 0.5
+        target_fill = 0.7
 
         env = ObservationScheduleEnvCurriculum(observer, time, obj_dict, eph_dict, target_fill, config = config)
 
         agent = PPOAgentCurriculum(env)
+
+        agent.actor_network = load_model(f'mrp-jaap-2425/PPO/curriculum/models/ppo_actor_network_0_60_{i}.keras')
+        agent.critic_network = load_model(f'mrp-jaap-2425/PPO/curriculum/models/ppo_critic_network_0_60_{i}.keras')
+        agent.actor_network_func = tf.function(agent.actor_network, reduce_retracing=True)
+        agent.critic_network_func = tf.function(agent.critic_network, reduce_retracing=True)
+
         rewards_mean, f_factors_mean, actions_taken_total, actions_logits_mean, steps_taken = agent.train()
         f_factors_mean_list.append(f_factors_mean)
         actions_taken_total_list.append(actions_taken_total)
         actions_logits_mean_list.append(actions_logits_mean)
         rewards_mean_list.append(rewards_mean)
         steps_taken_list.append(steps_taken)
+
+        agent.actor_network.save(f'mrp-jaap-2425/PPO/curriculum/models/ppo_actor_network_0_70_{i}.keras')
+        agent.critic_network.save(f'mrp-jaap-2425/PPO/curriculum/models/ppo_critic_network_0_70_{i}.keras')
+
 
     for i in range(4):
         plt.subplot(2,2,i+1)

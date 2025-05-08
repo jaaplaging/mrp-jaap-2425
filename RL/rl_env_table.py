@@ -36,12 +36,12 @@ class ObservationScheduleEnv():
 
     def reset(self):
         """ Resets the environment schedule to empty """        
-        self.state = np.full((self.length), 1, dtype='int32')
+        self.state = np.full((self.length), 0, dtype='int32')
         self.rewards = np.zeros((self.length))
         self.obs_starts = [None]*self.length
         self.obs_objects = {}
         self.obs_count = {}
-        self.object_state = self.__create_object_state()
+        self.object_state, self.object_state_norm = self.__create_object_state()
         self.object_to_ind = {}
         for object in self.objects.keys():
             self.obs_objects[object] = False  # keeps track which objects are being observed
@@ -63,9 +63,9 @@ class ObservationScheduleEnv():
         #     rise_ind, set_ind = self.__time_to_index(rise), self.__time_to_index(set)
         #     self.mask_object_visibility[ind, rise_ind:set_ind, :] = True
 
-        self.mask_day = np.full((3, self.config.state_length, 5), True)
+        self.mask_day = np.full((self.config.n_objects, self.config.state_length, 5), True)
 
-        self.mask_object_visibility = np.full((3,self.config.state_length,5), True)
+        self.mask_object_visibility = np.full((self.config.n_objects,self.config.state_length,5), True)
 
         self.base_mask = self.mask_day & self.mask_object_visibility
 
@@ -80,14 +80,14 @@ class ObservationScheduleEnv():
         self.action_availability_mask[:,4] = False
         #self.action_availability_mask[self.twilight_morning_ind-self.config.t_obs*2-self.config.t_setup*2-self.config.t_int:,0] = False
 
-        self.object_unavailability_mask = np.full((3, 5), False)
+        self.object_unavailability_mask = np.full((self.config.n_objects, 5), False)
         self.object_unavailability_mask[:,0] = True
 
-        self.observation_mask = np.full((3,self.config.state_length), False)
+        self.observation_mask = np.full((self.config.n_objects,self.config.state_length), False)
 
         #test to try to fix repetition of actions
-        self.taken_actions_mask = np.full((3,self.config.state_length,5), True)
-        self.taken_actions_countdown = np.full((3,self.config.state_length,5), 0)
+        self.taken_actions_mask = np.full((self.config.n_objects,self.config.state_length,5), True)
+        self.taken_actions_countdown = np.full((self.config.n_objects,self.config.state_length,5), 0)
 
         self.total_mask = self.base_mask & np.einsum('ij,kj -> kij', self.action_availability_mask, self.object_unavailability_mask) & self.taken_actions_mask
 
@@ -102,23 +102,33 @@ class ObservationScheduleEnv():
             if self.object_unavailability_mask[object,4]:
                 replace_available = np.full((self.config.state_length), False)
                 for i in range(len(self.state)-self.config.t_obs-self.config.t_setup):
-                    if not (self.state[i] == object + 2 and self.state[i+self.config.t_obs+self.config.t_setup-1] == object + 2):
-                        if all(self.state[j] in [1, object+2] for j in range(i,i+self.config.t_obs+self.config.t_setup)):
+                    if not (self.state[i] == object + 1 and self.state[i+self.config.t_obs+self.config.t_setup-1] == object + 1):
+                        if all(self.state[j] in [0, object+1] for j in range(i,i+self.config.t_obs+self.config.t_setup)):
                             if not all(self.state[j] == object+2 for j in range(i,i+self.config.t_obs+self.config.t_setup)):
                                 replace_available[i] = True
                 self.total_mask[object,:,4] = replace_available
         
+        self.taken_actions_countdown = np.where(self.taken_actions_countdown >= 1, self.taken_actions_countdown - 1, self.taken_actions_countdown)
         self.taken_actions_mask = np.where(self.taken_actions_countdown >= 1, False, True)
         self.total_mask = self.total_mask & self.taken_actions_mask
 
 
 
     def __create_object_state(self):
-        object_state = np.empty((3, 6))
+        object_state = np.empty((self.config.n_objects, 6))
 
-        object_state[0] = [30, 2., 20., 15., 0, 1]
-        object_state[1] = [60, 3., 20.3, 20., 0, 1]
-        object_state[2] = [75, 1.5, 19., 5., 0, 1]
+        def normalize(object_state):
+            object_state_norm = object_state.copy()
+            object_state_norm[:,0] = object_state_norm[:,0] / (0.5 * self.config.state_length) - 1 
+            object_state_norm[:,1] = (object_state_norm[:,1] - 5) / 5
+            object_state_norm[:,2] = (object_state_norm[:,2] - 17.5) / 5
+            object_state_norm[:,3] = (object_state_norm[:,3] - 50) / 25
+            return(object_state_norm)
+
+        for i in range(self.config.n_objects):
+            object_state[i] = [30, 2., 20., 15., 0, 1]
+        #object_state[1] = [60, 3., 20.3, 20., 0, 1]
+        #object_state[2] = [75, 1.5, 19., 5., 0, 1]
         # def get_airmass_peak(object_ephemerides):
         #     coords_mid = object_ephemerides['coord'][len(object_ephemerides['coord'])//2]
         #     peak_time = opt_time(self.observer, FixedTarget(name='target', coord=coords_mid), self.time)
@@ -139,9 +149,10 @@ class ObservationScheduleEnv():
         
         # for i in range(len(self.ephemerides.keys()), 20):
         #     object_state[i, :] = [0, 0, 0, 0, 0, 0]
+        
+        object_state_norm = normalize(object_state)
 
-
-        return(object_state)
+        return(object_state, object_state_norm)
 
 
     def __calculate_start_length(self):
@@ -216,11 +227,11 @@ class ObservationScheduleEnv():
             
         reward = self.calculate_reward()
 
-        if step > self.config.steps:
+        if step >= self.config.steps-1:
             done = 1
         else:
             done = 0
-        return([self.object_state, self.state], reward, done)
+        return([self.object_state_norm, self.state], reward, done)
 
 
     def calculate_reward(self):
@@ -266,7 +277,7 @@ class ObservationScheduleEnv():
         Returns:
             free (bool): True if time interval is empty in schedule
         """        
-        return(all([self.state[i] == 1 for i in range(start,end)]))
+        return(all([self.state[i] == 0 for i in range(start,end)]))
 
 
     def add_object(self, object, ind_start):
@@ -282,8 +293,8 @@ class ObservationScheduleEnv():
         #TODO make the 45 minute interval variable by +/- 5 minutes
         #TODO reconsider rewards (make weights a factor as well)
         
-        self.state[ind_start:ind_end_obs_1] = object+2
-        self.state[ind_start_obs_2:ind_end] = object+2
+        self.state[ind_start:ind_end_obs_1] = object+1
+        self.state[ind_start_obs_2:ind_end] = object+1
         self.rewards[ind_start:ind_end_obs_1] = 1
         self.rewards[ind_start_obs_2:ind_end] = 1
         self.obs_starts[ind_start] = self.__index_to_object(object)
@@ -291,6 +302,7 @@ class ObservationScheduleEnv():
         self.obs_objects[self.__index_to_object(object)] = True
         self.obs_count[self.__index_to_object(object)] = 2
         self.object_state[object, 4] = 2
+        self.object_state_norm[object, 4] = 0.2
 
         if ind_start-self.config.t_obs-self.config.t_setup-self.config.t_int+1 >= 0 and ind_start-self.config.t_int+self.config.t_setup+self.config.t_obs >= 0:
             self.action_availability_mask[ind_start-self.config.t_obs-self.config.t_setup-self.config.t_int+1:ind_start-self.config.t_int+self.config.t_setup+self.config.t_obs,0] = False
@@ -327,19 +339,20 @@ class ObservationScheduleEnv():
             object (int): object to remove completely from the schedule
         '''
         obj_str = self.__index_to_object(object)
-        self.rewards = np.where(self.state == object+2, 0, self.rewards)
-        self.state = np.where(self.state == object+2, 1, self.state)
+        self.rewards = np.where(self.state == object+1, 0, self.rewards)
+        self.state = np.where(self.state == object+1, 0, self.state)
         self.obs_starts = [None if self.obs_starts[i] == obj_str else self.obs_starts[i] for i in range(len(self.obs_starts))]
         self.obs_objects[obj_str] = False
         self.obs_count[obj_str] = 0
         self.object_state[object, 4] = 0
+        self.object_state_norm[object, 4] = 0
 
         for ind in range(len(self.state)):
-            if np.all(self.state[ind:ind+self.config.t_obs*2+self.config.t_setup*2] == 1):
+            if np.all(self.state[ind:ind+self.config.t_obs*2+self.config.t_setup*2] == 0):
                 self.action_availability_mask[ind,2] = True
-                if np.all(self.state[ind+self.config.t_int:ind+self.config.t_int+self.config.t_obs*2+self.config.t_setup*2] == 1):
+                if np.all(self.state[ind+self.config.t_int:ind+self.config.t_int+self.config.t_obs*2+self.config.t_setup*2] == 0):
                     self.action_availability_mask[ind,0] = True
-            if self.action_availability_mask[ind,3] and self.state[ind] == 1:
+            if self.action_availability_mask[ind,3] and self.state[ind] == 0:
                 self.action_availability_mask[ind,3] = False
             #if self.action_availability_mask[ind,4] and self.state[ind] == 1:
             #    self.action_availability_mask[ind,4] = False
@@ -368,11 +381,12 @@ class ObservationScheduleEnv():
         ind_end = ind+self.config.t_obs+self.config.t_setup
         obj_str = self.__index_to_object(object)
 
-        self.state[ind:ind_end] = object+2
+        self.state[ind:ind_end] = object+1
         self.rewards[ind:ind_end] = 1
         self.obs_starts[ind] = obj_str
         self.obs_count[obj_str] += 1
-        self.object_state[object, 4] += 1
+        self.object_state[object, 4] += 1        
+        self.object_state_norm[object, 4] += 0.1
 
         if ind-self.config.t_int-self.config.t_obs-self.config.t_setup+1 >= 0:
             self.action_availability_mask[ind-self.config.t_int-self.config.t_obs-self.config.t_setup+1:ind-self.config.t_int+self.config.t_obs+self.config.t_setup,0] = False
@@ -406,19 +420,20 @@ class ObservationScheduleEnv():
         ind_end = ind_start+self.config.t_obs+self.config.t_setup
         obj_str = self.__index_to_object(object)
 
-        self.state[ind_start:ind_end] = 1
+        self.state[ind_start:ind_end] = 0
         self.rewards[ind_start:ind_end] = 0
         self.obs_starts[ind_start] = None
         self.obs_count[self.__index_to_object(object)] -= 1
         self.object_state[object, 4] -= 1
+        self.object_state_norm[object, 4] -= 0.1
 
         for ind in range(ind_start-self.config.t_int-self.config.t_obs-self.config.t_setup+1,ind_end):
             if ind < len(self.state) and ind >= 0:
-                if np.all(self.state[ind:ind+self.config.t_obs*2+self.config.t_setup*2] == 1):
+                if np.all(self.state[ind:ind+self.config.t_obs*2+self.config.t_setup*2] == 0):
                     self.action_availability_mask[ind,2] = True
-                    if np.all(self.state[ind+self.config.t_int:ind+self.config.t_int+self.config.t_obs*2+self.config.t_setup*2] == 1):
+                    if np.all(self.state[ind+self.config.t_int:ind+self.config.t_int+self.config.t_obs*2+self.config.t_setup*2] == 0):
                         self.action_availability_mask[ind,0] = True
-                if self.action_availability_mask[ind,3] and self.state[ind] == 1:
+                if self.action_availability_mask[ind,3] and self.state[ind] == 0:
                     self.action_availability_mask[ind,3] = False
                 # if self.action_availability_mask[ind,4] and self.state[ind] == 1:
                 #     self.action_availability_mask[ind,4] = False
@@ -441,15 +456,15 @@ class ObservationScheduleEnv():
             ind_target (int): index at which an observation should be moved to
         '''
         chosen = False
-        if self.state[ind_target] == object+2:
+        if self.state[ind_target] == object+1:
             for i in range(ind_target+self.config.t_obs+self.config.t_setup-1,ind_target-1,-1):
-                if self.state[i] == object+2:
+                if self.state[i] == object+1:
                     chosen = True
                     ind_source = i-self.config.t_obs-self.config.t_setup+1
                     break
         if not chosen:
             for i in range(ind_target,ind_target+self.config.t_obs+self.config.t_setup):
-                if self.state[i] == object+2:
+                if self.state[i] == object+1:
                     chosen=True
                     ind_source = i
                     break
@@ -458,13 +473,13 @@ class ObservationScheduleEnv():
         while not chosen:
             try:
                 if ind_target - 1 - i >= 0:
-                    if self.state[ind_target - i - 1] == object+2:
+                    if self.state[ind_target - i - 1] == object+1:
                         chosen = True
                         ind_source = ind_target - i - self.config.t_obs - self.config.t_setup
             except IndexError:
                 pass
             try:
-                if self.state[ind_target + self.config.t_obs + self.config.t_setup + i] == object+2 and not chosen:
+                if self.state[ind_target + self.config.t_obs + self.config.t_setup + i] == object+1 and not chosen:
                     chosen = True
                     ind_source = ind_target + self.config.t_obs + self.config.t_setup + i
             except IndexError:

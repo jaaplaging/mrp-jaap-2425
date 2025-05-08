@@ -46,7 +46,7 @@ def get_objects():
         coordinates = SkyCoord(parts[5]+'h', parts[6]+'d', frame='gcrs')
         obj_dict[parts[0]] = {'obj': FixedTarget(name=parts[0],
                                         coord=coordinates),
-                            'mag_V': parts[7]}
+                            'apparent magnitude': parts[7]}
     return(obj_dict)
 
 
@@ -68,7 +68,7 @@ def select_objects(obj_dict, observer, time):
     twilight_breaking_dawn_part_II, twilight_evening = twilight_rise_set(observer, time)
     for object in list(obj_dict.keys()):
         # magnitude check
-        if float(obj_dict[object]['mag_V']) > config.mag_lim:
+        if float(obj_dict[object]['apparent magnitude']) > config.mag_lim:
             del obj_dict[object]
         elif near_moon(obj_dict[object]['obj'], time):
             del obj_dict[object]
@@ -111,8 +111,8 @@ def get_ephemerides(obj_dict, observer, time):
         '''
         ephemerides[descendant] = {'time': [],
                                     'coord': [],
-                                    'mag_V': [],
-                                    'motion': []}
+                                    'apparent magnitude': [],
+                                    'total motion': []}
         return(ephemerides)
 
     def parse_child_text(child, observer, t_breaking_dawn_part_II, t_evening, ephemerides):
@@ -140,8 +140,8 @@ def get_ephemerides(obj_dict, observer, time):
             if t_eph <= t_breaking_dawn_part_II and t_eph >= t_evening:
                 ephemerides[current]['time'].append(t_eph)
                 ephemerides[current]['coord'].append(coords)
-                ephemerides[current]['mag_V'].append(float(text[7]))
-                ephemerides[current]['motion'].append(np.sqrt((float(text[8]))**2 + (float(text[9]))**2))   
+                ephemerides[current]['apparent magnitude'].append(float(text[7]))
+                ephemerides[current]['total motion'].append(np.sqrt((float(text[8]))**2 + (float(text[9]))**2))   
         return(ephemerides, target)
 
     for descendant in soup.descendants:

@@ -5,12 +5,14 @@ import tensorflow as tf
 from keras.layers import Input, Dense, Concatenate, Flatten, CategoryEncoding
 from keras import Model
 from keras.models import save_model
+from keras.saving import load_model
 import helper
 from param_config import Configuration
 import random
 import matplotlib.pyplot as plt
 import seaborn as sns
 from time import perf_counter
+import copy
 
 config = Configuration()
 
@@ -36,33 +38,35 @@ class PPOAgentCurriculum():
 
 
     def __create_actor_network(self):
-        input_x = Input(shape=(6,))
+        input_x = Input(shape=(config.n_objects * 6,))
         input_y = Input(shape=(config.state_length,))
 
         x = Dense(256, activation='relu')(input_x)
         x = Dense(256, activation='relu')(x)
 
-        y = CategoryEncoding(num_tokens=(4))(input_y)
+        y = CategoryEncoding(num_tokens=2, output_mode='multi_hot')(input_y)
+        y = Flatten()(y)
         y = Dense(256, activation='relu')(y)
         y = Dense(256, activation='relu')(y)
 
         combined = Concatenate()([x, y])
 
         z = Dense(512, activation='relu')(combined)
-        z = Dense(1*config.state_length*5, activation='linear')(z)
+        z = Dense(config.n_objects*config.state_length*5, activation='linear')(z)
 
         model = Model(inputs=[input_x, input_y], outputs=z)
 
         return(model)
     
     def __create_critic_network(self):
-        input_x = Input(shape=(6,))
+        input_x = Input(shape=(config.n_objects * 6,))
         input_y = Input(shape=(config.state_length,))
 
         x = Dense(4, activation='relu')(input_x)
         x = Dense(4, activation='relu')(x)
 
-        y = CategoryEncoding(num_tokens=(4))(input_y)
+        y = CategoryEncoding(num_tokens=2, output_mode='one_hot')(input_y)
+        y = Flatten()(y)
         y = Dense(32, activation='relu')(y)
         y = Dense(4, activation='relu')(y)
 
@@ -94,7 +98,7 @@ class PPOAgentCurriculum():
             # Entropy bonus (optional)
             entropy_bonus = tf.reduce_mean(policy * tf.math.log(policy + 1e-10))
 
-            policy_loss = policy_loss - 0.01 * entropy_bonus
+            policy_loss = policy_loss - 0.1 * entropy_bonus
             return policy_loss, action_probs, old_action_probs
 
         @tf.function(reduce_retracing=True)
@@ -162,7 +166,7 @@ class PPOAgentCurriculum():
 
             states, actions, rewards, values, returns = [],[],[],[],[]
             self.env.reset()
-            state = [self.env.object_state, self.env.state]
+            state = copy.deepcopy([self.env.object_state, self.env.state])
 
             f_factors = []
             reward = -1
@@ -172,7 +176,7 @@ class PPOAgentCurriculum():
             self.actions_taken = [0,0,0,0,0]
 
             for step in range(steps):
-                state = [state[0].flatten().astype('float32').reshape(1,6), state[1].reshape(1,config.state_length)]
+                state = [state[0].flatten().astype('float32').reshape(1,self.env.config.n_objects*6), state[1].reshape(1,self.env.config.state_length)]
                 logits = self.actor_network_func(state) # self.actor_network.predict(state, verbose=0)
                 value = self.critic_network_func(state)  # self.critic_network.predict(state, verbose=0)
 
@@ -180,7 +184,7 @@ class PPOAgentCurriculum():
                 action_ind = np.unravel_index(action, (1, config.state_length, 5))
                 self.actions_taken[action_ind[2]] += 1
                 previous_reward = np.sum(self.env.rewards)/len(self.env.rewards)
-                next_state, reward, done = self.env.step(action_ind[0], action_ind[1], action_ind[2])
+                next_state, reward, done = copy.deepcopy(self.env.step(action_ind[0], action_ind[1], action_ind[2]))
 
                 logits_reshaped = logits.numpy().reshape((1,config.state_length,5))
                 for a in range(5):
@@ -201,12 +205,12 @@ class PPOAgentCurriculum():
                 reward_per_action[action_ind[2]] += reward
                 taken_actions[action_ind[2]] += 1
 
-                states.append(state)
+                states.append(copy.deepcopy(state))
                 actions.append(action)
                 rewards.append(reward)
                 values.append(value.numpy()[0,0])
 
-                state = next_state
+                state = copy.deepcopy(next_state)
                 if done or step == config.steps-1:
                     returns_batch = []
                     discounted_sum = 0
@@ -277,8 +281,6 @@ class PPOAgentCurriculum():
 
 
 
-        self.actor_network.save('ppo_actor_network.keras')
-        self.critic_network.save('ppo_critic_network.keras')
 
         return(rewards_mean, f_factors_mean, actions_taken_total, actions_logits_mean, steps_taken)
             
