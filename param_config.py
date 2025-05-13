@@ -1,7 +1,11 @@
+# Module that contains the configuration class, which contains parameters used by the algorithm.
+
 import astropy.units as u
 import numpy as np
 
 class Configuration:
+    """Class that holds all parameters to be used by the code
+    """
     def __init__(self):
         """ Initializes the configuration parameters """
         

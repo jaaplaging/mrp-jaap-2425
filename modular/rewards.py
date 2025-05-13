@@ -1,8 +1,17 @@
+# Module containing the class(es) used to determine the reward a given schedule gets. 
+
 import numpy as np
 
 class Reward():
-    
+    """Class that keeps track of the rewards of a given schedule"""
     def __init__(self, weight_fill_factor):
+        """Initializes the reward class
+
+        Args:
+            weight_fill_factor (float): Determines the balance between fill factor and other factors in determining the
+            final reward returned by self.get_reward(). 0 means only the other factors factor in and 1 means
+            only the fill factor factors in.
+        """
         self.w_fill_factor = weight_fill_factor
         self.fill_factor_reward = -1
         self.observations_reward = -1
@@ -17,6 +26,15 @@ class Reward():
 
 
     def get_reward(self, env, empty_flag):
+        """Returns the reward for the given environmen in its current state
+
+        Args:
+            env (environment object): Any (already initialized) class from the environments.py module
+            empty_flag (int): Value in the schedule indicating no object is being observed at that time.
+
+        Returns:
+            self.total_reward: total reward, determined from the fill factor and other factors. 
+        """
         if self.w_fill_factor > 0:
             self.update_fill_factor_reward(env, empty_flag)
         if self.w_fill_factor < 1:
@@ -28,6 +46,13 @@ class Reward():
         return(self.total_reward)
     
     def update_fill_factor_reward(self, env, empty_flag):
+        """Updates the fill factor reward based on the current status of the environment.
+        Fill factor is simply defined as the fraction of the schedule that is filled with observations.
+
+        Args:
+            env (environment object): Any environment object from the environments.py module    
+            empty_flag (int): Value indicating no object is being observed in the schedule
+        """
         if type(env.schedule) == type([]):
             fill = np.sum(np.where(np.array(env.schedule) > empty_flag, 1, 0))
         else:
@@ -36,6 +61,11 @@ class Reward():
         self.fill_factor_reward = fill_factor * 2 - 1
 
     def update_observations_reward(self, env):
+        """Updates the reward of the other terms based on the current status of the environment.
+
+        Args:
+            env (environment object): Any environment object from the environments.py module
+        """
         self.r_time_from_peak = 0
         self.r_airmass = 0
         self.r_magnitude = 0
@@ -44,6 +74,7 @@ class Reward():
 
         ind_eval = 0
         n_obs = 0
+        # Determine the values of the rewards that are different for every observation 
         while ind_eval+1 < len(env.schedule):
             obj = env.schedule[ind_eval]
             if obj == env.empty_flag:
@@ -67,6 +98,7 @@ class Reward():
         self.r_time_gap = self.__get_reward_time_gap(env)
         self.r_all_viewed = self.__get_reward_all_viewed(env)
 
+        # calculate the total observations reward
         self.observations_reward = env.config.w_time_from_peak * self.r_time_from_peak \
                 + env.config.w_airmass * self.r_airmass \
                 + env.config.w_magnitude * self.r_magnitude \
@@ -75,18 +107,21 @@ class Reward():
                 + env.config.w_time_gap * self.r_time_gap \
                 + env.config.w_all_viewed * self.r_all_viewed
         
-        # scale total reward from -1 to 1, with lower limit
-        # self.observations_reward = self.observations_reward / env.config.w_total
-        # if  < 0.25: # at least this much needed
-        #     r_total = -1
-        # else:
-        #     r_total -= 0.25
-        #     r_total *= 4
-        #     r_total -= 1
+        # Scale the total reward from -1 to 1
         self.observations_reward /= env.config.w_total
         self.observations_reward = self.observations_reward * 2 - 1
 
     def __get_reward_time_from_peak(self, env, ind_eval, obj):
+        """Calculate the reward for how close the observations are to the best airmass value
+
+        Args:
+            env (environment object): Object from the environments.py module
+            ind_eval (int): Index at which to evaluate the reward
+            obj (int): Object for which to calculate the reward
+
+        Returns:
+            dt_scaled (float): scaled time difference between best airmass and observation
+        """
         peak_time = env.object_state[obj-1-env.empty_flag, 0]
         dt = np.abs(peak_time - (ind_eval + env.config.t_obs//2 + env.config.t_setup//2))
         scale = env.object_state[obj-1-env.empty_flag, 2] - peak_time
@@ -102,12 +137,32 @@ class Reward():
         return(dt_scaled)
     
     def __get_reward_airmass(self, env, ind_eval, obj):
+        """Calculate the reward for the given observation based on the airmass of the object
+
+        Args:
+            env (environment object): Environment object from the environments.py module
+            ind_eval (int): Index of the observation of which to evaluate the reward
+            obj (int): Object for which to determine the reward
+        
+        Returns:
+            r_airmass (float): reward for observation based on the airmass of the object
+        """
         airmass = env.object_state[obj-1-env.empty_flag, 3]
         r_airmass = 1 / airmass
         
         return(r_airmass)
     
     def __get_reward_magnitude(self, env, ind_eval, obj):
+        """Calculates the reward for the given observation based on the magnitude of the object
+
+        Args:
+            env (environment object): Environment object from the environments.py module
+            ind_eval (int): Index of the observation of which to evaluate the reward
+            obj (int): Object for which to determine the reward
+
+        Returns:
+            dm_scaled (float): Calculated magnitude reward for the given observation 
+        """
         magnitude = env.object_state[obj-1-env.empty_flag, 4]
         if magnitude > env.config.mag_lim:
             return(0)

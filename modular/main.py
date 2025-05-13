@@ -1,3 +1,9 @@
+# Module containing wrapper functions for training the agents. Call with ephemerides, environments and agents classes
+# Use: python main.py <ephimerides class> <environment class> <agent class>
+# ephimerides class can be: 'dummy', 'sim', 'sim_rnd' and 'real'
+# environments class can be: 'sched' and 'otf'
+# agents class can be: 'gd', 'dqn' and 'ppo'
+
 import sys
 import pickle
 import numpy as np
@@ -15,11 +21,20 @@ from agents import PPOAgent, DQNAgent, GDAgent
 import optuna
 
 def run(config, eph_class, env_class, agent_class, source, random=False):
+    """Wrapper function that initiates all of the classes and trains the model and saves the results.
+
+    Args:
+        config (param_config.Configuration): object that holds all parameters
+        eph_class (ephemerides class): any class from the ephemerides module
+        env_class (environment class): any class from the environments module
+        agent_class (agent class): any class from the agent module
+        source (str): string of the function calling run()
+        random (bool, optional): Whether ephemerides should be random at every episode. Defaults to False.
+    """
+    # try-except to avoid occasional exceptions stopping the module
     try:
         observer = create_observer()
         time = Time.now()
-
-        # idea: try and except around loop so that the batch doesnt fail entirely
 
         ephemerides = eph_class(observer, time, config=config, random=random)
         reward = Reward(weight_fill_factor=W_FF)
@@ -44,6 +59,16 @@ def run(config, eph_class, env_class, agent_class, source, random=False):
             pickle.dump(string, f)
 
 
+
+# For all functions below:
+"""objective functions to be used by the optuna optimization
+
+Args:
+    trial: study from the optuna package
+
+Returns:
+    final reward (float): inverted final reward to be minimized by optuna
+"""
 
 def objective_dummy_sched_dqn(trial):
     config = Configuration()
@@ -342,14 +367,18 @@ def objective_sim_rnd_otf_gd(trial):
     return(-final_rewards_env) 
 
 if __name__ == '__main__':
+    # load command line arguments, see start of this module for instructions
     eph, env, agent = sys.argv[1], sys.argv[2], sys.argv[3]
 
+    # Determine the fill factor weights for the reward function
     Ws = [0, 0.5, 1]
     for W in Ws:
         W_FF = W
 
+        # Convert the command line arguments to a string and convert it to an actual function
         str_func = f'objective_{eph}_{env}_{agent}'
         func = globals()[str_func]
 
+        # hyperparameter tuning with optuna
         study = optuna.create_study()
         study.optimize(objective_dummy_sched_dqn, n_trials=100)
