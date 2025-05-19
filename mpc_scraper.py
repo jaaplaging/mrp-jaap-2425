@@ -1,3 +1,6 @@
+# Module that contains functionality to read the MPC NEO table, send information to the form and 
+# obtain the ephemerides for the NEOs from the resulting ephemerides page
+
 import numpy as np
 import requests
 from bs4 import BeautifulSoup

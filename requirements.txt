@@ -8,3 +8,7 @@ pytz
 requests
 beautifulsoup4
 seaborn
+tensorflow
+keras
+optuna
+

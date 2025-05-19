@@ -1,3 +1,7 @@
+# Module that contains helper functions that perform basic tasks such as calculating rise and set times for 
+# NEOs and determining NEOs' airmass.
+
+
 import numpy as np
 from astropy.time import Time
 from astropy.coordinates import SkyCoord 
