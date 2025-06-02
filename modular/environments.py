@@ -708,6 +708,7 @@ class OnTheFlyEnv():
 
         if self.insert_time + self.config.t_setup + self.config.t_obs > self.length:
             done = 1
+            self.schedule = self.schedule[:self.length]
             reward = self.reward.get_reward(self, -1)
         else:
             done = 0

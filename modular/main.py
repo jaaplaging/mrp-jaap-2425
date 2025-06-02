@@ -51,12 +51,18 @@ def run(config, eph_class, env_class, agent_class, source, random=False):
         time_current = time_current.replace(':', '_').replace('-', '_')
         with open(f'mrp-jaap-2425/modular/results/{source}_WFF{W_FF}_{time_current}.pkl', 'wb') as f:
             pickle.dump(results, f)
-
+        
         return(final_rewards_env)
     except:
         string = 'failed during run'
+        time_current = Time.now().isot[:-4]
+        time_current = time_current.replace(':', '_').replace('-', '_')
         with open(f'mrp-jaap-2425/modular/results/FAIL_{source}_WFF{W_FF}_{time_current}.pkl', 'wb') as f:
             pickle.dump(string, f)
+        if 'gd' in source:
+            return(-2)
+        else:
+            return([-2])
 
 
 
@@ -215,7 +221,7 @@ def objective_sim_rnd_sched_ppo(trial):
     config.clip_ratio = trial.suggest_float('clip', 0, 0.3)
     config.n_epochs = trial.suggest_int('epoch', 5, 15)
 
-    final_rewards_env = run(config, EphemeridesSimulated, ScheduleEnv, PPOAgent, 'objective_sim_rnd_sched_dqn', random=True)
+    final_rewards_env = run(config, EphemeridesSimulated, ScheduleEnv, PPOAgent, 'objective_sim_rnd_sched_ppo', random=True)
 
     return(-final_rewards_env[-1])
 
@@ -371,7 +377,7 @@ if __name__ == '__main__':
     eph, env, agent = sys.argv[1], sys.argv[2], sys.argv[3]
 
     # Determine the fill factor weights for the reward function
-    Ws = [0, 0.5, 1]
+    Ws = [0.5]
     for W in Ws:
         W_FF = W
 
@@ -381,4 +387,4 @@ if __name__ == '__main__':
 
         # hyperparameter tuning with optuna
         study = optuna.create_study()
-        study.optimize(objective_dummy_sched_dqn, n_trials=100)
+        study.optimize(func, n_trials=5)
