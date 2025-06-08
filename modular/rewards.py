@@ -202,7 +202,7 @@ class Reward():
         for object in env.observations:
             if len(object) > 1:
                 for i in range(len(object)-1):
-                    gap = object[i+1] - object[i]
+                    gap = object[i+1] - (object[i]+env.config.t_obs)
                     if gap <= env.config.t_int_min or gap > env.config.t_int * 2:
                         r.append(0)
                     elif gap > env.config.t_int_min and gap <= env.config.t_int:

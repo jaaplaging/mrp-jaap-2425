@@ -164,9 +164,9 @@ class ScheduleEnv():
             """
             object_state_norm = object_state.copy()
             object_state_norm[:,:3] = object_state_norm[:,:3] / (0.5 * self.config.state_length) - 1 
-            object_state_norm[:,3] = (object_state_norm[:,4] - 5) / 5
-            object_state_norm[:,4] = (object_state_norm[:,5] - 17.5) / 5
-            object_state_norm[:,5] = (object_state_norm[:,6] - 50) / 25
+            object_state_norm[:,3] = (object_state_norm[:,3] - 5) / 5
+            object_state_norm[:,4] = (object_state_norm[:,4] - 17.5) / 5
+            object_state_norm[:,5] = (object_state_norm[:,5] - 50) / 25
             return(object_state, object_state_norm)
 
         state_ind = 0
@@ -335,8 +335,8 @@ class ScheduleEnv():
         self.observations[object].append(ind_start_obs_2)
         self.obs_objects[object] = True
         self.obs_count[object] = 2
-        self.object_state[object, 4] = 2
-        self.object_state_norm[object, 4] = 0.2
+        self.object_state[object, 6] = 2
+        self.object_state_norm[object, 6] = 0.2
 
         # Update the masks
         if ind_start-self.config.t_obs-self.config.t_setup-self.config.t_int+1 >= 0 and ind_start-self.config.t_int+self.config.t_setup+self.config.t_obs >= 0:
@@ -379,8 +379,8 @@ class ScheduleEnv():
         self.observations[object] = []
         self.obs_objects[object] = False
         self.obs_count[object] = 0
-        self.object_state[object, 4] = 0
-        self.object_state_norm[object, 4] = 0
+        self.object_state[object, 6] = 0
+        self.object_state_norm[object, 6] = 0
 
         # Update masks
         for ind in range(len(self.schedule)):
@@ -421,8 +421,8 @@ class ScheduleEnv():
         self.obs_starts[ind] = object+1
         self.observations[object].append(ind)
         self.obs_count[object] += 1
-        self.object_state[object, 4] += 1
-        self.object_state_norm[object, 4] += 0.1
+        self.object_state[object, 6] += 1
+        self.object_state_norm[object, 6] += 0.1
 
         # Update the masks
         if ind-self.config.t_int-self.config.t_obs-self.config.t_setup+1 >= 0:
@@ -464,8 +464,8 @@ class ScheduleEnv():
             if obs == object:
                 self.observations[object].pop(ind)
         self.obs_count[object] -= 1
-        self.object_state[object, 4] -= 1
-        self.object_state_norm[object, 4] -= 0.1
+        self.object_state[object, 6] -= 1
+        self.object_state_norm[object, 6] -= 0.1
 
         # Update the masks
         for ind in range(ind_start-self.config.t_int-self.config.t_obs-self.config.t_setup+1,ind_end):
@@ -626,9 +626,9 @@ class OnTheFlyEnv():
             """
             object_state_norm = object_state.copy()
             object_state_norm[:,:3] = object_state_norm[:,:3] / (0.5 * self.config.state_length) - 1 
-            object_state_norm[:,3] = (object_state_norm[:,4] - 5) / 5
-            object_state_norm[:,4] = (object_state_norm[:,5] - 17.5) / 5
-            object_state_norm[:,5] = (object_state_norm[:,6] - 50) / 25
+            object_state_norm[:,3] = (object_state_norm[:,3] - 5) / 5
+            object_state_norm[:,4] = (object_state_norm[:,4] - 17.5) / 5
+            object_state_norm[:,5] = (object_state_norm[:,5] - 50) / 25
             return(object_state, object_state_norm)
 
         state_ind = 0
