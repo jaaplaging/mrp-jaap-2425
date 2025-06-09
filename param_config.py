@@ -48,7 +48,7 @@ class Configuration:
         self.layer_size = 256
         self.layer_size_critic = 32
 
-        self.state_length = 120  # minutes
+        self.state_length = 360  # minutes
         self.n_objects = 5  # objects
 
         # PPO 

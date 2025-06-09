@@ -175,7 +175,7 @@ class EphemeridesReal():
         target = FixedTarget(name='target', coord=coords_mid)
         rise, set = rise_set(self.observer, target, self.time)
         rise_ind, set_ind = self.time_to_ind(rise), self.time_to_ind(set)
-        if set < self.dusk or rise > self.dawn:  # If the object is never visible
+        if set < self.dusk or rise > self.dawn or set_ind < 0 or rise_ind > self.config.state_length:  # If the object is never visible
             return(-1, -1, -1, -1)
         else:
             peak_time = opt_time(self.observer, target, self.time)

@@ -43,6 +43,8 @@ class ScheduleEnv():
         self.reward = reward_class
         self.empty_flag = 0
 
+        self.eph_names = []
+
         self.reset(eph_class)
 
         np.random.seed(self.config.seed)
@@ -188,6 +190,7 @@ class ScheduleEnv():
                 object_state[state_ind,:] = [peak_ind, rise_ind, set_ind, peak_airmass, mag, motion, observations, previous_observation, flag]
                 self.object_to_ind[object] = ind
                 state_ind += 1
+                self.eph_names.append(object)
             if state_ind >= self.config.n_objects:
                 break
         
@@ -339,19 +342,19 @@ class ScheduleEnv():
         self.object_state_norm[object, 6] = 0.2
 
         # Update the masks
-        if ind_start-self.config.t_obs-self.config.t_setup-self.config.t_int+1 >= 0 and ind_start-self.config.t_int+self.config.t_setup+self.config.t_obs >= 0:
-            self.action_availability_mask[ind_start-self.config.t_obs-self.config.t_setup-self.config.t_int+1:ind_start-self.config.t_int+self.config.t_setup+self.config.t_obs,0] = False
-        elif ind_start-self.config.t_int+self.config.t_setup+self.config.t_obs >= 0:
-            self.action_availability_mask[:ind_start-self.config.t_int+self.config.t_setup+self.config.t_obs,0] = False
-        if ind_start-self.config.t_obs-self.config.t_setup+1 >= 0:
-            self.action_availability_mask[ind_start-self.config.t_obs-self.config.t_setup+1:ind_end_obs_1,0] = False
-            self.action_availability_mask[ind_start-self.config.t_obs-self.config.t_setup+1:ind_end_obs_1,2] = False
+        if ind_start-self.config.t_obs*2-self.config.t_setup-self.config.t_int >= 0 and ind_start-self.config.t_int+self.config.t_setup >= 0:
+            self.action_availability_mask[ind_start-self.config.t_obs*2-self.config.t_setup-self.config.t_int:ind_start-self.config.t_int+self.config.t_setup,0] = False
+        elif ind_start-self.config.t_int+self.config.t_setup >= 0:
+            self.action_availability_mask[:ind_start-self.config.t_int+self.config.t_setup,0] = False
+        if ind_start-self.config.t_obs-self.config.t_setup >= 0:
+            self.action_availability_mask[ind_start-self.config.t_obs-self.config.t_setup:ind_end_obs_1,0] = False
+            self.action_availability_mask[ind_start-self.config.t_obs-self.config.t_setup:ind_end_obs_1,2] = False
         else:
             self.action_availability_mask[:ind_end_obs_1,0] = False
             self.action_availability_mask[:ind_end_obs_1,2] = False
-        self.action_availability_mask[ind_start_obs_2-self.config.t_obs-self.config.t_setup+1:ind_end,0] = False
+        self.action_availability_mask[ind_start_obs_2-self.config.t_obs-self.config.t_setup:ind_end,0] = False
         #self.action_availability_mask[:,1] = True
-        self.action_availability_mask[ind_start_obs_2-self.config.t_obs-self.config.t_setup+1:ind_end,2] = False
+        self.action_availability_mask[ind_start_obs_2-self.config.t_obs-self.config.t_setup:ind_end,2] = False
         self.action_availability_mask[ind_start,3] = True
         self.action_availability_mask[ind_start_obs_2,3] = True
         #self.action_availability_mask[ind_start,4] = True
@@ -384,15 +387,15 @@ class ScheduleEnv():
 
         # Update masks
         for ind in range(len(self.schedule)):
-            if np.all(self.schedule[ind:ind+self.config.t_obs*2+self.config.t_setup*2] == 0):
+            if np.all(self.schedule[ind:ind+self.config.t_obs+self.config.t_setup] == 0):
                 self.action_availability_mask[ind,2] = True
-                if np.all(self.schedule[ind+self.config.t_int:ind+self.config.t_int+self.config.t_obs*2+self.config.t_setup*2] == 0):
+                if np.all(self.schedule[ind+self.config.t_int+self.config.t_obs:ind+self.config.t_int+self.config.t_obs*2+self.config.t_setup] == 0):
                     self.action_availability_mask[ind,0] = True
             if self.action_availability_mask[ind,3] and self.schedule[ind] == 0:
                 self.action_availability_mask[ind,3] = False
             #if self.action_availability_mask[ind,4] and self.state[ind] == 1:
             #    self.action_availability_mask[ind,4] = False
-        self.action_availability_mask[-self.config.t_int-self.config.t_obs*2-self.config.t_setup*2:,0] = False
+        self.action_availability_mask[-self.config.t_int-self.config.t_obs*2-self.config.t_setup:,0] = False
         self.action_availability_mask[-self.config.t_obs-self.config.t_setup:,2] = False
 
         self.object_unavailability_mask[object,0] = True
@@ -425,13 +428,13 @@ class ScheduleEnv():
         self.object_state_norm[object, 6] += 0.1
 
         # Update the masks
-        if ind-self.config.t_int-self.config.t_obs-self.config.t_setup+1 >= 0:
-            self.action_availability_mask[ind-self.config.t_int-self.config.t_obs-self.config.t_setup+1:ind-self.config.t_int+self.config.t_obs+self.config.t_setup,0] = False
-        elif ind-self.config.t_int+self.config.t_obs+self.config.t_setup >= 0:
-            self.action_availability_mask[:ind-self.config.t_int+self.config.t_obs+self.config.t_setup,0] = False
-        if ind-self.config.t_obs-self.config.t_setup+1 >= 0:
-            self.action_availability_mask[ind-self.config.t_obs-self.config.t_setup+1:ind_end,0] = False
-            self.action_availability_mask[ind-self.config.t_obs-self.config.t_setup+1:ind_end,2] = False
+        if ind-self.config.t_int-self.config.t_obs*2-self.config.t_setup >= 0:
+            self.action_availability_mask[ind-self.config.t_int-self.config.t_obs*2-self.config.t_setup:ind-self.config.t_int+self.config.t_setup,0] = False
+        elif ind-self.config.t_int+self.config.t_setup >= 0:
+            self.action_availability_mask[:ind-self.config.t_int+self.config.t_setup,0] = False
+        if ind-self.config.t_obs-self.config.t_setup >= 0:
+            self.action_availability_mask[ind-self.config.t_obs-self.config.t_setup:ind_end,0] = False
+            self.action_availability_mask[ind-self.config.t_obs-self.config.t_setup:ind_end,2] = False
         else:
             self.action_availability_mask[:ind_end,0] = False
             self.action_availability_mask[:ind_end,2] = False
@@ -470,15 +473,15 @@ class ScheduleEnv():
         # Update the masks
         for ind in range(ind_start-self.config.t_int-self.config.t_obs-self.config.t_setup+1,ind_end):
             if ind < len(self.schedule) and ind >= 0:
-                if np.all(self.schedule[ind:ind+self.config.t_obs*2+self.config.t_setup*2] == 0):
+                if np.all(self.schedule[ind:ind+self.config.t_obs+self.config.t_setup] == 0):
                     self.action_availability_mask[ind,2] = True
-                    if np.all(self.schedule[ind+self.config.t_int:ind+self.config.t_int+self.config.t_obs*2+self.config.t_setup*2] == 0):
+                    if np.all(self.schedule[ind+self.config.t_int+self.config.t_obs:ind+self.config.t_int+self.config.t_obs*2+self.config.t_setup] == 0):
                         self.action_availability_mask[ind,0] = True
                 if self.action_availability_mask[ind,3] and self.schedule[ind] == 0:
                     self.action_availability_mask[ind,3] = False
                 # if self.action_availability_mask[ind,4] and self.state[ind] == 1:
                 #     self.action_availability_mask[ind,4] = False
-        self.action_availability_mask[-self.config.t_int-self.config.t_obs*2-self.config.t_setup*2:,0] = False
+        self.action_availability_mask[-self.config.t_int-self.config.t_obs*2-self.config.t_setup:,0] = False
         self.action_availability_mask[-self.config.t_obs-self.config.t_setup:,2] = False
 
         if self.obs_count[object] < 3:
@@ -571,6 +574,8 @@ class OnTheFlyEnv():
         self.dawn, self.dusk = twilight_rise_set(self.observer, self.time)
         self.empty_flag = -1
 
+        self.eph_names = []
+
         self.reset(eph_class)
 
         np.random.seed(self.config.seed)
@@ -650,6 +655,7 @@ class OnTheFlyEnv():
                 object_state[state_ind,:] = [peak_ind, rise_ind, set_ind, peak_airmass, mag, motion, observations, previous_observation, flag]
                 self.object_to_ind[object] = ind
                 state_ind += 1
+                self.eph_names.append(object)
             if state_ind >= self.config.n_objects:
                 break
         

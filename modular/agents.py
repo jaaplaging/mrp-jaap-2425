@@ -321,6 +321,60 @@ class PPOAgent():
                          all_viewed_rewards]
 
         return(final_rewards_eval, other_results)
+    
+    def evaluate(self):
+        """Runs the agent without training in order to evaluate the results
+        """
+        r_total = []
+        r_ff = []
+        r_peak = []
+        r_airmass = []
+        r_mag = []
+        r_motion = []
+        r_n_obs = []
+        r_gap = []
+        r_all = []
+        actions_taken = []
+
+        state = copy.deepcopy(self.env.reset(self.eph_class))
+        
+        done = 0
+
+        step = 0
+        while not done:
+            step += 1
+            state = [state[0].flatten().astype(self.state_type_a).reshape(1, self.state_size_a), state[1].flatten().astype(self.state_type_b).reshape(1, self.state_size_b)]
+            logits = self.actor_network_func(state) # self.actor_network.predict(state, verbose=0)
+
+            # off-policy argmax instead of on-policy stochastic
+            action = tf.math.argmax(tf.where(self.env.create_mask(), logits, -np.inf), 1)[0].numpy()
+            next_state, reward, done = copy.deepcopy(self.env.step(action))
+
+            r_total.append(reward)
+            r_ff.append(self.env.reward.fill_factor_reward)
+            r_peak.append(self.env.reward.r_time_from_peak)
+            r_airmass.append(self.env.reward.r_airmass)
+            r_mag.append(self.env.reward.r_magnitude)
+            r_motion.append(self.env.reward.r_motion)
+            r_n_obs.append(self.env.reward.r_n_observations)
+            r_gap.append(self.env.reward.r_time_gap)
+            r_all.append(self.env.reward.r_all_viewed)
+            actions_taken.append(action)
+
+            state = copy.deepcopy(next_state)
+            if done or step > 10 * self.env.config.steps:
+                break 
+        
+        rewards = [r_total,
+                   r_ff,
+                   r_peak,
+                   r_airmass,
+                   r_mag,
+                   r_motion,
+                   r_n_obs,
+                   r_gap,
+                   r_all]
+        return(rewards, actions_taken, self.env.schedule)
             
 
 
@@ -536,10 +590,64 @@ class DQNAgent():
 
         return(final_rewards_eval, other_results)
     
+    def evaluate(self):
+        """Runs the agent without training in order to evaluate the results
+        """
+        r_total = []
+        r_ff = []
+        r_peak = []
+        r_airmass = []
+        r_mag = []
+        r_motion = []
+        r_n_obs = []
+        r_gap = []
+        r_all = []
+        actions_taken = []
+
+        state = copy.deepcopy(self.env.reset(self.eph_class))
+        
+        done = 0
+
+        step = 0
+        while not done:
+            step += 1
+            state = [state[0].flatten().astype(self.state_type_a).reshape(1, self.state_size_a), state[1].flatten().astype(self.state_type_b).reshape(1, self.state_size_b)]
+            logits = self.q_network_func(state) # self.actor_network.predict(state, verbose=0)
+
+            # off-policy argmax instead of on-policy stochastic
+            action = tf.math.argmax(tf.where(self.env.create_mask(), logits, -np.inf), 1)[0].numpy()
+            next_state, reward, done = copy.deepcopy(self.env.step(action))
+
+            r_total.append(reward)
+            r_ff.append(self.env.reward.fill_factor_reward)
+            r_peak.append(self.env.reward.r_time_from_peak)
+            r_airmass.append(self.env.reward.r_airmass)
+            r_mag.append(self.env.reward.r_magnitude)
+            r_motion.append(self.env.reward.r_motion)
+            r_n_obs.append(self.env.reward.r_n_observations)
+            r_gap.append(self.env.reward.r_time_gap)
+            r_all.append(self.env.reward.r_all_viewed)
+            actions_taken.append(action)
+
+            state = copy.deepcopy(next_state)
+            if done or step > 10 * self.env.config.steps:
+                break 
+        
+        rewards = [r_total,
+                   r_ff,
+                   r_peak,
+                   r_airmass,
+                   r_mag,
+                   r_motion,
+                   r_n_obs,
+                   r_gap,
+                   r_all]
+        return(rewards, actions_taken, self.env.schedule)
+    
 
 class GDAgent():
 
-    def __init__(self, env, eph_class):
+    def __init__(self, env, eph_class, eval=False):
         """Initializes the gradient descent 'agent'
 
         Args:
@@ -554,6 +662,7 @@ class GDAgent():
                                         env.config.w_remove_obs,
                                         env.config.w_replace])
         self.eph_class = eph_class
+        self.eval = eval
         np.random.seed(self.env.config.seed)
 
 
@@ -645,6 +754,17 @@ class GDAgent():
         total_weights = np.outer(self.object_weights, self.action_weights)
         total_weights = np.tile(total_weights[:,np.newaxis,:], (1,self.env.config.state_length,1))
 
+        if self.eval:
+            self.r_total = []
+            self.r_ff = []
+            self.r_peak = []
+            self.r_airmass = []
+            self.r_mag = []
+            self.r_motion = []
+            self.r_n_obs = []
+            self.r_gap = []
+            self.r_all = []
+            self.actions_taken = []
 
         def sample_action(next_env, total_weights):
             """Samples an action to take based on the weights and the masks of the environment
@@ -666,13 +786,38 @@ class GDAgent():
         while iteration < self.env.config.max_iter: # and self.env.calculate_reward() < 0.95:
             next_env = copy.deepcopy(self.env)
             # Perform n_sub_iter sampled steps
+            if self.eval:
+                next_r_total, next_r_ff, next_r_peak, next_r_airmass, next_r_mag, next_r_motion, next_r_n_obs, next_r_gap, next_r_all, next_actions_taken = [],[],[],[],[],[],[],[],[],[]
             for sub_iter in range(self.env.config.n_sub_iter):
                 action = sample_action(next_env, total_weights)            
-                _, _, _ = next_env.step(action)
+                _, reward, _ = next_env.step(action)
+                if self.eval:
+                    next_r_total.append(reward)
+                    next_r_ff.append(self.env.reward.fill_factor_reward)
+                    next_r_peak.append(self.env.reward.r_time_from_peak)
+                    next_r_airmass.append(self.env.reward.r_airmass)
+                    next_r_mag.append(self.env.reward.r_magnitude)
+                    next_r_motion.append(self.env.reward.r_motion)
+                    next_r_n_obs.append(self.env.reward.r_n_observations)
+                    next_r_gap.append(self.env.reward.r_time_gap)
+                    next_r_all.append(self.env.reward.r_all_viewed)
+                    next_actions_taken.append(action)
+
 
             # Evaluate the environment after taking n_sub_iter random steps
             if next_env.reward.get_reward(next_env,next_env.empty_flag) > self.env.reward.get_reward(self.env, self.env.empty_flag):
                 self.env = copy.deepcopy(next_env)
+                if self.eval:
+                    self.r_total.extend(next_r_total)
+                    self.r_ff.extend(next_r_ff)
+                    self.r_peak.extend(next_r_peak)
+                    self.r_airmass.extend(next_r_airmass)
+                    self.r_mag.extend(next_r_mag)
+                    self.r_motion.extend(next_r_motion)
+                    self.r_n_obs.extend(next_r_n_obs)
+                    self.r_gap.extend(next_r_gap)
+                    self.r_all.extend(next_r_all)
+                    self.actions_taken.extend(next_actions_taken)
             iteration += 1
 
     def gradient_descent_on_the_fly(self):
@@ -680,6 +825,18 @@ class GDAgent():
         """
         iteration = 0
         total_weights = np.concat([[self.env.config.w_empty_add],self.object_weights])
+
+        if self.eval:
+            self.r_total = []
+            self.r_ff = []
+            self.r_peak = []
+            self.r_airmass = []
+            self.r_mag = []
+            self.r_motion = []
+            self.r_n_obs = []
+            self.r_gap = []
+            self.r_all = []
+            self.actions_taken = []
 
         def sample_action(next_env, total_weights):
             """Samples an action weighted randomly
@@ -701,15 +858,39 @@ class GDAgent():
         while iteration < self.env.config.max_iter: # and self.env.calculate_reward() < 0.95:
             next_env = copy.deepcopy(self.env)
             # For n_sub_iter iterations, sample and take an action
+            if self.eval:
+                next_r_total, next_r_ff, next_r_peak, next_r_airmass, next_r_mag, next_r_motion, next_r_n_obs, next_r_gap, next_r_all, next_actions_taken = [],[],[],[],[],[],[],[],[],[]
             for sub_iter in range(self.env.config.n_sub_iter_otf):
                 action = sample_action(next_env, total_weights)            
-                _, _, done = next_env.step(action)
+                _, reward, done = next_env.step(action)
+                if self.eval:
+                    next_r_total.append(reward)
+                    next_r_ff.append(self.env.reward.fill_factor_reward)
+                    next_r_peak.append(self.env.reward.r_time_from_peak)
+                    next_r_airmass.append(self.env.reward.r_airmass)
+                    next_r_mag.append(self.env.reward.r_magnitude)
+                    next_r_motion.append(self.env.reward.r_motion)
+                    next_r_n_obs.append(self.env.reward.r_n_observations)
+                    next_r_gap.append(self.env.reward.r_time_gap)
+                    next_r_all.append(self.env.reward.r_all_viewed)
+                    next_actions_taken.append(action)
                 if done:
                     break
 
             # Evaluate the environment after taking n_sub_iter sampled actions
             if next_env.reward.get_reward(next_env, next_env.empty_flag) > self.env.reward.get_reward(self.env, self.env.empty_flag):
                 self.env = copy.deepcopy(next_env)
+                if self.eval:
+                    self.r_total.extend(next_r_total)
+                    self.r_ff.extend(next_r_ff)
+                    self.r_peak.extend(next_r_peak)
+                    self.r_airmass.extend(next_r_airmass)
+                    self.r_mag.extend(next_r_mag)
+                    self.r_motion.extend(next_r_motion)
+                    self.r_n_obs.extend(next_r_n_obs)
+                    self.r_gap.extend(next_r_gap)
+                    self.r_all.extend(next_r_all)
+                    self.actions_taken.extend(next_actions_taken)
             iteration += 1
     
     def train(self):
@@ -738,5 +919,17 @@ class GDAgent():
                          self.env.reward.r_n_observations,
                          self.env.reward.r_time_gap,
                          self.env.reward.r_all_viewed]
-
-        return(final_results_eval, other_results)
+        if not self.eval:
+            return(final_results_eval, other_results)
+        else:
+            rewards = [self.r_total,
+                       self.r_ff,
+                       self.r_peak,
+                       self.r_airmass,
+                       self.r_mag,
+                       self.r_motion,
+                       self.r_n_obs,
+                       self.r_gap,
+                       self.r_all]
+            return(rewards, self.actions_taken, self.env.schedule)
+    
