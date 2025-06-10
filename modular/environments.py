@@ -87,7 +87,11 @@ class ScheduleEnv():
         # Mask that keeps track of the visibility of objects based on when they rise and set
         self.mask_object_visibility = np.full((self.config.n_objects,self.config.state_length,5), False)
         for ind, obj in enumerate(self.object_state):
-            self.mask_object_visibility[ind, np.max([0,int(obj[1])]):np.min([self.config.state_length,int(obj[2])]), :] = True
+            self.mask_object_visibility[ind, np.max([0,int(obj[1])]):np.min([self.config.state_length-self.config.t_int-2*self.config.t_obs-self.config.t_setup,int(obj[2])-self.config.t_int-2*self.config.t_obs-self.config.t_setup]), 0] = True
+            self.mask_object_visibility[ind, :self.mask_day.shape[0],1] = True
+            self.mask_object_visibility[ind, np.max([0,int(obj[1])]):np.min([self.config.state_length-self.config.t_obs-self.config.t_setup,int(obj[2])-self.config.t_obs-self.config.t_setup]), 2] = True
+            self.mask_object_visibility[ind, np.max([0,int(obj[1])]):np.min([self.config.state_length,int(obj[2])]), 3] = True
+            self.mask_object_visibility[ind, np.max([0,int(obj[1])]):np.min([self.config.state_length-self.config.t_obs-self.config.t_setup,int(obj[2])-self.config.t_obs-self.config.t_setup]), 4] = True
 
         self.base_mask = self.mask_day & self.mask_object_visibility
 
@@ -123,7 +127,7 @@ class ScheduleEnv():
         # Rebuild the availability of the remove observation and the replace observation action
         for object in range(self.total_mask.shape[0]):
             if self.object_unavailability_mask[object,3]:
-                self.total_mask[object,:,3] = self.observation_mask[object,:]
+                self.total_mask[object,:,3] = self.observation_mask[object,:] & self.base_mask[object,:,3]
             if self.object_unavailability_mask[object,4]:
                 replace_available = np.full((self.config.state_length), False)
                 for i in range(len(self.schedule)-self.config.t_obs-self.config.t_setup):

@@ -20,16 +20,16 @@ class Configuration:
         self.t_int_min = 30  # minutes
         self.t_replace = 15  # minutes
         self.airmass_window = 6/24  # days
-        self.init_attempts = 130
-        self.w_add_object = 35
-        self.w_remove_object = 2.5
-        self.w_add_obs = 25
-        self.w_remove_obs = 5
-        self.w_replace = 32.5
+        self.init_attempts = 125
+        self.w_add_object = 30
+        self.w_remove_object = 2
+        self.w_add_obs = 30
+        self.w_remove_obs = 3
+        self.w_replace = 30
         self.w_empty_add = 1e-5
-        self.max_iter = 100
+        self.max_iter = 120
         self.init_fill = 0.4
-        self.n_sub_iter = 35
+        self.n_sub_iter = 30
         self.n_sub_iter_otf = 3
         self.add_attempts = 13
 

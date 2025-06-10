@@ -181,6 +181,8 @@ class EphemeridesReal():
             peak_time = opt_time(self.observer, target, self.time)
             peak_ind = int((peak_time - self.dusk).value*24*60)
             peak_airmass = airmass(self.observer, target, peak_time)
+            if peak_airmass <= 0:
+                return(-1, -1, -1, -1)
             return(peak_ind, peak_airmass, rise_ind, set_ind)
 
     def scrape_ephemerides(self):
