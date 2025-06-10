@@ -131,11 +131,11 @@ class ScheduleEnv():
                         if all(self.schedule[j] in [0, object+1] for j in range(i,i+self.config.t_obs+self.config.t_setup)):
                             if not all(self.schedule[j] == object+1 for j in range(i,i+self.config.t_obs+self.config.t_setup)):
                                 replace_available[i] = True
-                self.total_mask[object,:,4] = replace_available
+                self.total_mask[object,:,4] = replace_available & self.base_mask[object,:,4]
         
-        self.taken_actions_countdown = np.where(self.taken_actions_countdown >= 1, self.taken_actions_countdown - 1, self.taken_actions_countdown)
-        self.taken_actions_mask = np.where(self.taken_actions_countdown >= 1, False, True)
-        self.total_mask = self.total_mask & self.taken_actions_mask
+        # self.taken_actions_countdown = np.where(self.taken_actions_countdown >= 1, self.taken_actions_countdown - 1, self.taken_actions_countdown)
+        # self.taken_actions_mask = np.where(self.taken_actions_countdown >= 1, False, True)
+        # self.total_mask = self.total_mask & self.taken_actions_mask
 
     def create_mask(self):
         """Returns that total mask to be applied to the logits of the agent networks
